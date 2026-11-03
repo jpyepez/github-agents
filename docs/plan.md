@@ -19,8 +19,8 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - **This repo**
      - [ ] `ci.yml`, as in [Testing the engine](design.md#testing-the-engine)
    - **Workflows**
-     - [ ] `.github/workflows/triage.yml`: `on: workflow_call`, inputs `issue` and `label`, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, concurrency per issue
-     - [ ] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run at a time per repo.
+     - [ ] `.github/workflows/triage.yml`: `on: workflow_call`, inputs `issue` and `label`, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, one run per issue as in [Concurrency](design.md#jobs)
+     - [ ] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run at a time per repo, as in [Concurrency](design.md#jobs).
      - [ ] Self-checkout at `job.workflow_sha` in every job that runs engine code
      - [ ] `templates/callers/triage.yml` and `templates/callers/implement.yml`, byte-identical in every repo
    - **Check step** (`scripts/check.ts`, run first in `prepare`; `doctor` reuses it in step 7)
@@ -47,6 +47,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [ ] The sandbox run checks that a host off the list is blocked
    - **Release**
      - [ ] The public sandbox run ([Testing the engine](design.md#testing-the-engine)) passes for triage and implement
+     - [ ] In the sandbox, label an issue `ready` while another implement run is busy, then add a label that doesn't match, and check that the `ready` run still builds. It's untested whether a job skipped by its `if` enters a concurrency group, and this settles it.
      - [ ] Tag `v1.0.0` and `v1`, after the owner's go-ahead
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.

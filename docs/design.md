@@ -131,6 +131,8 @@ Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, 
 
 **Files between jobs:** `agent` uploads its output folder as an artifact (`actions/upload-artifact`), with its commits as a `git bundle` inside. `apply` downloads it, checks the bundle's branch and commits, validates the files, then pushes. **Why:** artifacts are the documented way to pass files between jobs, job outputs are too small for specs and screenshots, and nothing the agent writes reaches GitHub until `apply` has checked it.
 
+**Concurrency:** `concurrency` sits on the `agent` and `apply` jobs, never on the workflow. Both jobs run only when `prepare` outputs that the run should go ahead, so skip runs never enter a group. Implement uses one group per repo, and triage one per issue. Each job has its own group (for example `implement-agent` and `implement-apply`), so another run's `agent` can't take the group between this run's two jobs and leave its `apply` pending. **Why:** the caller starts a run on every label event by the owner, and `apply` sets labels with `OWNER_PAT`, acting as the owner, so each triage starts several skip runs. GitHub keeps only one pending run per group, and a newer pending run cancels the older one. A `ready` run waiting behind a busy implement run could be cancelled by a skip run from a label added seconds later, and the build would be lost without a trace. Whether a job skipped by its `if` enters its concurrency group is untested; the v1 sandbox run settles it.
+
 ### Egress
 
 Decided with the owner on 2026-11-03 for step 3. The `agent` job's first step is `step-security/harden-runner` (v2.22.3 or later), with:
