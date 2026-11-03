@@ -120,6 +120,10 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
 
+### Pinned actions
+
+Every third-party action in the engine's workflows, and in this repo's own CI, is pinned to a full commit SHA, with its version in a comment: `actions/checkout@3d3c42e… # v7.0.1`. **Why:** they run with `OWNER_PAT` in every consumer repo, and a tag can be moved to other code, so a moved tag would be a supply-chain hole. A version bump is a reviewed PR that changes the SHA and the comment together.
+
 ### Jobs
 
 Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, in order:
@@ -138,7 +142,7 @@ Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, 
 
 Decided with the owner on 2026-11-03 for step 3. The `agent` job's first step is `step-security/harden-runner` (v2.22.3 or later), with:
 
-- `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs.
+- `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs. The workflows take an `egress-policy` input for that pass. It defaults to `block`, and the byte-identical callers never set it; only the sandbox's caller passes `audit`.
 - `disable-telemetry: true`, so run data doesn't go to StepSecurity. It only works with `block`.
 - `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`.
 

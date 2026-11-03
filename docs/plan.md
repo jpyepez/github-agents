@@ -19,15 +19,15 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - **This repo**
      - [x] `ci.yml`, as in [Testing the engine](design.md#testing-the-engine)
    - **Workflows**
-     - [ ] `.github/workflows/triage.yml`: `on: workflow_call`, inputs `issue` and `label`, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, one run per issue as in [Concurrency](design.md#jobs)
-     - [ ] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run per issue, as in [Concurrency](design.md#jobs).
-     - [ ] Self-checkout at `job.workflow_sha` in every job that runs engine code
-     - [ ] `templates/callers/triage.yml` and `templates/callers/implement.yml`, byte-identical in every repo
+     - [x] `.github/workflows/triage.yml`: `on: workflow_call`, input `issue` (triage runs on opening or by hand, so it needs no label), plus `egress-policy` for the audit pass, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, one run per issue as in [Concurrency](design.md#jobs)
+     - [x] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run per issue, as in [Concurrency](design.md#jobs).
+     - [x] Self-checkout at `job.workflow_sha` in every job that runs engine code
+     - [x] `templates/callers/triage.yml` and `templates/callers/implement.yml`, byte-identical in every repo
    - **Check step** (`scripts/check.ts`, run first in `prepare`; `doctor` reuses it in step 7)
      - [x] Every row of the design's table: a missing or empty secret, the board, the labels, the ready bar and hand-back list, `docs/git-workflow.md`, a tracker other than GitHub
    - **Settings**
      - [x] `scripts/settings.ts`: read `.github/agents.yml`, apply every default from the design's table, and fail on an unknown key or a bad value. A missing key always means the more cautious setting.
-     - [ ] `automation: triage` means `apply` never lets an outcome start an implement run, and implement skips at once
+     - [x] `automation: triage` means `apply` never lets an outcome start an implement run, and implement skips at once
    - **Scripts**, generic: the repo from `GITHUB_REPOSITORY`, the project by number, the Status field and columns by name
      - [x] `scripts/tracker.ts`, the tracker seam: every label, comment, body, assignee, PR and board call
      - [x] `scripts/board-status.ts`, ported, on top of `tracker.ts`
@@ -35,13 +35,13 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [x] An implement-outcome check: `pr.md` or `handback.md` is present and well formed, the bundle's branch is `branch_prefix` + the issue number, and no commit touches `.github/`. It also enforces the [`Closes` rule](design.md#board): `pr.md` has `Closes #<n>` for its own issue only (`handback.md` none), and no commit message has a closing keyword (`close`, `fix` or `resolve`, any tense) before `#<n>`.
      - [x] Unit tests for each, ported from dev-website-2026's where they exist
    - **Prompts**
-     - [ ] `prompts/triage.md` and `prompts/implement.md`, ported. The agent reads the issue file, writes its output files and never calls `gh` to write. They link the repo's ready bar and hand-back list, with the design's fallbacks when one is missing.
-     - [ ] `implement.md` says a closing keyword in a commit message also closes that issue on merge, so other issues are written as "issue N" in commits as well as in `pr.md`
-     - [ ] Nothing repo-specific left in them (the porting notes' list)
+     - [x] `prompts/triage.md` and `prompts/implement.md`, ported. The agent reads the issue file, writes its output files and never calls `gh` to write. They link the repo's ready bar and hand-back list, with the design's fallbacks when one is missing.
+     - [x] `implement.md` says a closing keyword in a commit message also closes that issue on merge, so other issues are written as "issue N" in commits as well as in `pr.md`
+     - [x] Nothing repo-specific left in them (the porting notes' list)
    - **Owner-only comments**
-     - [ ] `prepare` writes the issue, its body and only the owner's comments to a file, and the agent works from that file
+     - [x] `prepare` writes the issue, its body and only the owner's comments to a file, and the agent works from that file
    - **Egress allowlist**
-     - [ ] harden-runner on the `agent` job, as in [design.md](design.md#egress), with the default allowlist in the engine and additions from `agents.yml`
+     - [x] harden-runner on the `agent` job, as in [design.md](design.md#egress), with the default allowlist in the engine and additions from `agents.yml`
      - [ ] One audit-mode pass in the sandbox, to find the hosts the browser walk needs
      - [ ] In that pass, test plain `bunx playwright install chromium` (no `--with-deps`) on `ubuntu-latest`, since the image already ships Chrome and likely its libraries. If it fails, the libraries need sudo, which the `agent` job doesn't have. bullfrog doesn't help with that, since it also needs sudo off to be safe, so it would need a new decision.
      - [ ] The sandbox run checks that a host off the list is blocked
