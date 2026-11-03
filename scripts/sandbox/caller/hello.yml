@@ -1,0 +1,13 @@
+# Caller for github-agents-sandbox's .github/workflows/hello.yml.
+# Step 2 ran it against the step-2-plumbing-test branch at cd99532.
+name: Hello
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  hello:
+    if: github.actor == github.repository_owner
+    uses: jpyepez/github-agents/.github/workflows/hello.yml@main
+    secrets:
+      OWNER_PAT: ${{ secrets.OWNER_PAT }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

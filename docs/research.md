@@ -1,6 +1,6 @@
 # Research
 
-GitHub Actions facts the design rests on. They were checked against docs.github.com on 2026-11-03. Step 2 of the [plan](plan.md) tests the untested ones.
+GitHub Actions facts the design rests on. They were checked against docs.github.com on 2026-11-03. Step 2 of the [plan](plan.md) tested the rest, below.
 
 ## Verified in the docs
 
@@ -20,9 +20,16 @@ GitHub Actions facts the design rests on. They were checked against docs.github.
 - **Status options get new IDs when replaced** (observed on 2026-11-03, not from the docs). Replacing a Status field's options through `updateProjectV2Field` gives every option a new ID, even one whose name stays the same. Built-in board workflows that still point at the old IDs break: the UI shows a red icon, and each one must be set to its Status again. Change options in place rather than replacing them, or re-check the workflows afterwards.
 - **Rulesets and branch protection** aren't available on private repos on the Free plan; the API returns 403. Public repos get them free.
 
-## Untested: step 2 settles these
+## Tested in step 2
 
-- [ ] The self-checkout works from a private caller with the default token, the engine being public.
-- [ ] Secrets passed by name arrive in the callee.
-- [ ] What the agent's shell environment exposes in `claude-code-action`. If `CLAUDE_CODE_OAUTH_TOKEN` or other secrets are visible, add an egress allowlist (for example harden-runner).
-- [ ] A fine-grained PAT can move cards on a user-owned Projects board. If it can, use one per repo, limited to that repo, instead of the classic `OWNER_PAT` (scopes `repo`, `project`, `read:org`, which reaches every repo).
+Run on 2026-11-03 from the private repo `github-agents-sandbox` (since deleted), calling [`.github/workflows/hello.yml`](../.github/workflows/hello.yml) at `cd99532` on ubuntu 26.04 runners, with `claude-code-action@v1` and `actions/checkout@v7`. The caller is [`scripts/sandbox/caller/hello.yml`](../scripts/sandbox/caller/hello.yml).
+
+- [x] **Self-checkout works from a private caller with the default token.** `job.workflow_repository` was `jpyepez/github-agents`, `job.workflow_ref` named the engine's branch, and `actions/checkout` with `repository: ${{ job.workflow_repository }}` and `ref: ${{ job.workflow_sha }}` landed on exactly that commit. `actionlint` doesn't know the `job.workflow_*` properties yet and flags them; ignore that.
+- [x] **Secrets passed by name arrive in the callee.** But **`required: true` doesn't catch an empty secret.** A secret that was set to an empty string passed the check and arrived with 0 characters. (A `!` command in Claude Code has no terminal, so `gh secret set` there reads an empty value instead of prompting; pipe the value in instead.) The check step must test that each secret is non-empty.
+- [x] **The agent's shell can reach `CLAUDE_CODE_OAUTH_TOKEN` and the action's `github_token`, but not `OWNER_PAT`.** A probe the agent ran compared sha256 hashes of what its shell could reach against the real secrets. The job was shaped like v1, with `OWNER_PAT` only in an earlier step's `env`.
+  - `OWNER_PAT`: not found. A step's `env` doesn't carry over to later steps, even through `/proc`.
+  - `CLAUDE_CODE_OAUTH_TOKEN`: not in the agent's own env, but readable in `/proc/<pid>/environ` of the action's `bun` process, the `claude` process and their parent shell, all running as the same user.
+  - The `github_token` input (here `github.token`): in the agent's own env as `GH_TOKEN`, `GITHUB_TOKEN`, `DEFAULT_WORKFLOW_TOKEN` and `OVERRIDE_GITHUB_TOKEN`. So the agent can do whatever that token's `permissions` allow.
+  - The agent's env also has empty `ANTHROPIC_API_KEY`, `AWS_*` and `SSH_SIGNING_KEY` names, from the action.
+  - The probe didn't decode the credentials `actions/checkout` persists: v7 writes them base64-encoded to a `git-credentials-*.config` file under `$RUNNER_TEMP`, not to `.git/config`. Assume the agent can read those too, and check out with `persist-credentials: false` where the agent runs.
+  - **So:** the OAuth token is reachable, and an egress allowlist is needed (step 3 of the plan). Limit the `permissions` of every job that runs the agent, since a step can't narrow its job's token, and never give the agent `OWNER_PAT`.

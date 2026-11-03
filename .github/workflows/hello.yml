@@ -1,0 +1,97 @@
+name: Hello
+
+# Step 2's plumbing test (docs/plan.md). A private caller runs this to settle the
+# "Untested" items in docs/research.md. Kept as a reference after the sandbox is gone.
+on:
+  workflow_call:
+    secrets:
+      OWNER_PAT: { required: true }
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions:
+  contents: read
+
+jobs:
+  plumbing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Show whose context this is
+        run: |
+          echo "github.repository:       ${{ github.repository }}"
+          echo "job.workflow_repository: ${{ job.workflow_repository }}"
+          echo "job.workflow_ref:        ${{ job.workflow_ref }}"
+          echo "job.workflow_sha:        ${{ job.workflow_sha }}"
+
+      # Test 1: the engine checks itself out at the pinned commit, with the default token.
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .engine
+          persist-credentials: false
+      - name: Self-checkout landed on the pinned commit
+        env:
+          WANT: ${{ job.workflow_sha }}
+        run: |
+          got=$(git -C .engine rev-parse HEAD)
+          echo "checked out $got, want $WANT"
+          [ -n "$WANT" ] && [ "$got" = "$WANT" ]
+          test -f .engine/scripts/sandbox/agent-env-probe.sh
+
+      # Test 2: secrets passed by name arrive non-empty. Only lengths are printed.
+      - name: Secrets passed by name arrived
+        env:
+          OWNER_PAT: ${{ secrets.OWNER_PAT }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          ok=true
+          for name in OWNER_PAT CLAUDE_CODE_OAUTH_TOKEN; do
+            value=${!name}
+            echo "$name: ${#value} characters"
+            [ -n "$value" ] || ok=false
+          done
+          $ok
+
+  # Test 3: what the agent's shell can reach. The job is shaped like v1: OWNER_PAT only in
+  # a shell step's env, never in the agent step's. A probe the agent runs hashes every
+  # token-like value it can find and compares the hashes with those of the real secrets.
+  agent-env:
+    needs: plumbing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The caller, with checkout's defaults, as implement would have it.
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .engine
+          persist-credentials: false
+
+      - name: Hash the secrets for the probe
+        env:
+          OWNER_PAT: ${{ secrets.OWNER_PAT }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GITHUB_TOKEN_VALUE: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/secret-hashes"
+          for name in OWNER_PAT CLAUDE_CODE_OAUTH_TOKEN GITHUB_TOKEN_VALUE; do
+            printf '%s %s\n' "$(printf %s "${!name}" | sha256sum | cut -c1-64)" "$name" >> "$out"
+          done
+          echo "hashed $(wc -l < "$out") secrets"
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Run exactly this command with the Bash tool, then reply "done":
+            bash .engine/scripts/sandbox/agent-env-probe.sh ${{ runner.temp }}/secret-hashes ${{ runner.temp }}/probe-report.txt
+          claude_args: --max-turns 4 --allowedTools Bash
+
+      - name: Probe report
+        if: always()
+        run: |
+          cat "$RUNNER_TEMP/probe-report.txt" || echo "No report: the agent didn't run the probe."
