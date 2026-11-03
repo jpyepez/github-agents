@@ -15,6 +15,9 @@ GitHub Actions facts the design rests on. They were checked against docs.github.
   - https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsecretsinherit
   - https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows
 - **Labels from `GITHUB_TOKEN`** don't start other workflows, and `GITHUB_TOKEN` can't edit a user-owned Projects board. That's why the owner's PAT applies labels and edits the board.
+- **Closing keywords.** `close`, `fix` or `resolve` in any tense (`closes`, `fixed`, …), followed by `#<n>`, anywhere in a PR description, link the PR to the issue and close the issue when the PR merges into the default branch. A keyword in a commit message also closes the issue on merge. A PR that targets another branch ignores the keywords. None of this depends on a board workflow. The keywords, or a manual link from the PR sidebar's Development section, create the link that the "Pull request linked to issue" board workflow reacts to; a plain `#<n>` mention doesn't.
+  - https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
+- **Status options get new IDs when replaced** (observed on 2026-11-03, not from the docs). Replacing a Status field's options through `updateProjectV2Field` gives every option a new ID, even one whose name stays the same. Built-in board workflows that still point at the old IDs break: the UI shows a red icon, and each one must be set to its Status again. Change options in place rather than replacing them, or re-check the workflows afterwards.
 - **Rulesets and branch protection** aren't available on private repos on the Free plan; the API returns 403. Public repos get them free.
 
 ## Untested: step 2 settles these
