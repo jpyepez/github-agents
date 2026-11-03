@@ -80,7 +80,7 @@ Every key is optional. **A missing setting makes the engine more cautious, never
 | `browser` | on when `test:e2e` exists | the headless walk and PR screenshots |
 | `categories` | `bug`, `enhancement`, `documentation` | |
 | `labels` | the default names (`ready`, `needs-info`, `ready-for-human`, `wontfix`, `needs-triage`) | `setup-work` allows overrides; the scripts must honour them |
-| `columns` | Inbox, Ready, In progress, HITL, Done | |
+| `columns` | Inbox, HITL, Ready, In progress, Done | |
 | `skip_labels` | `notes`, `spec`, `pathfinder:*` | triage leaves these alone |
 | `caps` | triage 30 turns / 30 min; implement 80 turns / 120 min | |
 | `base` | `main` | |
