@@ -42,13 +42,13 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [x] `prepare` writes the issue, its body and only the owner's comments to a file, and the agent works from that file
    - **Egress allowlist**
      - [x] harden-runner on the `agent` job, as in [design.md](design.md#egress), with the default allowlist in the engine and additions from `agents.yml`
-     - [ ] One audit-mode pass in the sandbox, to find the hosts the browser walk needs
-     - [ ] In that pass, test plain `bunx playwright install chromium` (no `--with-deps`) on `ubuntu-latest`, since the image already ships Chrome and likely its libraries. If it fails, the libraries need sudo, which the `agent` job doesn't have. bullfrog doesn't help with that, since it also needs sudo off to be safe, so it would need a new decision.
-     - [ ] The sandbox run checks that a host off the list is blocked
+     - [x] One audit-mode pass in the sandbox, to find the hosts the browser walk needs
+     - [x] In that pass, test plain `bunx playwright install chromium` (no `--with-deps`) on `ubuntu-latest`, since the image already ships Chrome and likely its libraries. If it fails, the libraries need sudo, which the `agent` job doesn't have. bullfrog doesn't help with that, since it also needs sudo off to be safe, so it would need a new decision.
+     - [x] The sandbox run checks that a host off the list is blocked
    - **Release**
      - [ ] The public sandbox run ([Testing the engine](design.md#testing-the-engine)) passes for triage and implement
      - [ ] In the sandbox, label two issues `ready` while a third issue's build is running, and add a label that doesn't match. Check that all three build. Then label one issue `ready` a second time, and check that it replaces only that issue's own pending run. It's untested whether a job skipped by its `if` enters a concurrency group, and this settles it.
-     - [ ] In the sandbox, probe with step 2's hash method whether the agent's shell can reach `ACTIONS_RUNTIME_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. Issue events run on `main`, so if it can, a hijacked agent could poison caches that CI on `main` restores. If it's reachable, that becomes a decision before the tag.
+     - [x] In the sandbox, probe with step 2's hash method whether the agent's shell can reach `ACTIONS_RUNTIME_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. Issue events run on `main`, so if it can, a hijacked agent could poison caches that CI on `main` restores. If it's reachable, that becomes a decision before the tag.
      - [ ] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
      - [ ] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
      - [ ] Tag `v1.0.0` and `v1`, after the owner's go-ahead
