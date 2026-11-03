@@ -43,7 +43,7 @@ The **contract** is what each repo provides:
 
 ## Callers
 
-The callers are byte-identical in every repo. Triggers and the owner gate stay in the caller, because a `workflow_call` workflow can't declare event triggers. Secrets pass by name, because `secrets: inherit` is documented only for organisations (see [research](research.md)).
+The callers are byte-identical in every repo. Triggers and the owner gate stay in the caller, because a `workflow_call` workflow can't declare event triggers. The caller checks only who acted, and passes the label that started the run. It names no label, because `agents.yml` can rename labels and change `skip_labels`, and a caller that hard-codes `ready` or `spec` would then never start or never skip a run. The engine's `prepare` job compares the label with `agents.yml` and skips everything else. The cost is a short skipped run on every label event by the owner. Decided with the owner on 2026-11-03 for step 3. Secrets pass by name, because `secrets: inherit` is documented only for organisations (see [research](research.md)).
 
 ```yaml
 # <repo>/.github/workflows/implement.yml
@@ -54,12 +54,12 @@ jobs:
   implement:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner) ||
-      (github.event.label.name == 'ready' && !contains(github.event.issue.labels.*.name, 'spec') &&
-       github.event.issue.user.login == github.repository_owner &&
+      (github.event.issue.user.login == github.repository_owner &&
        github.event.sender.login == github.repository_owner)
     uses: jpyepez/github-agents/.github/workflows/implement.yml@v1
     with:
       issue: ${{ github.event.issue.number || inputs.issue }}
+      label: ${{ github.event.label.name }}
     secrets:
       OWNER_PAT: ${{ secrets.OWNER_PAT }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -108,7 +108,7 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
   - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status.
   - Implement commits locally and writes `pr.md` (title and description), or `handback.md`, plus screenshots. The shell pushes the branch, opens or updates the PR, posts the screenshots, and hands off to HITL when needed.
 - **The agent's job keeps `GITHUB_TOKEN` read-only**, for example `contents: read` and `issues: read`. The agent sees the action's `github_token` in its environment, and `permissions` apply to a whole job, not to one step, so every job that runs the agent stays read-only. All writes go through `OWNER_PAT` in shell steps: push, PR, labels, comments and board. That also suits GitHub's rule that pushes and labels made with `GITHUB_TOKEN` don't start other workflows. See [research](research.md#tested-in-step-2).
-- **The agent's job limits egress** to the hosts it needs, because the OAuth token can be read from the agent's shell (see [research](research.md#tested-in-step-2)).
+- **The agent's job limits egress** to the hosts it needs, because the OAuth token can be read from the agent's shell (see [research](research.md#tested-in-step-2)). See [Egress](#egress) below.
 - **Owner-only comments.** The workflow fetches the issue and only the owner's comments into a file, and the agent works from that file.
 - **`main` rulesets** on every consumer repo: a PR plus the required `checks` job, with no one able to skip them, the owner included, since the PAT acts as the owner.
 - **One classic `OWNER_PAT`** (scopes `repo`, `project`, `read:org`) for every repo, not a fine-grained token per repo. Decided on 2026-11-03.
@@ -118,6 +118,30 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
   - Step 2's agent-environment test found `OWNER_PAT` unreachable from the agent's shell, so the classic token stands. Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards.
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
+
+### Jobs
+
+Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, in order:
+
+- **`prepare`** (shell, `OWNER_PAT`): the check step, reading `agents.yml`, the label and skip checks, the claim (implement), and writing the issue with only the owner's comments to a file.
+- **`agent`** (`GITHUB_TOKEN` read-only, no `OWNER_PAT`, egress limited): runs Claude, which writes its output files and, for implement, commits locally.
+- **`apply`** (shell, `OWNER_PAT`): validates the agent's output, then makes every write: body, comments, labels, Status, push, PR, screenshots and hand-off.
+
+**Why:** `permissions` apply to a whole job, so only a job of its own keeps the agent's token read-only. A secret a job never references never reaches that job's processes.
+
+**Files between jobs:** `agent` uploads its output folder as an artifact (`actions/upload-artifact`), with its commits as a `git bundle` inside. `apply` downloads it, checks the bundle's branch and commits, validates the files, then pushes. **Why:** artifacts are the documented way to pass files between jobs, job outputs are too small for specs and screenshots, and nothing the agent writes reaches GitHub until `apply` has checked it.
+
+**Concurrency:** `concurrency` sits on the `agent` and `apply` jobs, never on the workflow. Both jobs run only when `prepare` outputs that the run should go ahead, so skip runs never enter a group. Triage and implement both use one group per issue, so builds for different issues run in parallel, and only a second run for the same issue replaces a pending one, which is wanted. A single implement group per repo would drop builds: with three issues marked `ready` at once, the first builds, the second waits, and the third cancels the second. The cost: parallel builds use more Claude quota at once, and two PRs may conflict at merge, which review handles as with any two PRs. Each job has its own group (for example `implement-agent-<issue>` and `implement-apply-<issue>`), so another run's `agent` can't take the group between this run's two jobs and leave its `apply` pending. **Why:** the caller starts a run on every label event by the owner, and `apply` sets labels with `OWNER_PAT`, acting as the owner, so each triage starts several skip runs. GitHub keeps only one pending run per group, and a newer pending run cancels the older one. A `ready` run waiting behind a busy implement run could be cancelled by a skip run from a label added seconds later, and the build would be lost without a trace. Whether a job skipped by its `if` enters its concurrency group is untested; the v1 sandbox run settles it.
+
+### Egress
+
+Decided with the owner on 2026-11-03 for step 3. The `agent` job's first step is `step-security/harden-runner` (v2.22.3 or later), with:
+
+- `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs.
+- `disable-telemetry: true`, so run data doesn't go to StepSecurity. It only works with `block`.
+- `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`.
+
+**Why harden-runner:** it enforces host-wide, so Claude's shell is covered, and it's free for public repos, which every consumer repo will be by step 5. It doesn't enforce on a private repo without a subscription, and it has fail-open cases in its source. The v1 test checks that a host off the list is blocked. The fallback is `bullfrogsec/bullfrog`. Details and sources are in [research](research.md#verified-in-the-docs).
 
 ## The check step
 
@@ -149,7 +173,18 @@ Each repo has one user-owned board. These are its settings and the reasons for t
   - Only a claim moves a card to In progress: implement's claim step, or "claim before working".
   - That workflow was the one card move the Status table can't explain, and a stray closing keyword could pull a card out of HITL.
   - It also works against the privilege split, in which shell steps set Status from validated files.
-- **The `Closes` rule stays:** `Closes #<n>` on its own line, and any other issue written as "issue N". A closing keyword in any tense, anywhere in a PR description, closes that issue on merge, whatever the board's workflows are (see [research](research.md#verified-in-the-docs)), and an issue closed by mistake disappears without notice. The rule first came from a card wrongly moved from Done to In progress (lyrics-display PR 24, dev-website-2026 PR 56). That workflow is off now, so the closing keyword is the reason the rule remains.
+- **The `Closes` rule stays:** `Closes #<n>` on its own line, and any other issue written as "issue N". A closing keyword in any tense, anywhere in a PR description, closes that issue on merge, whatever the board's workflows are (see [research](research.md#verified-in-the-docs)), and an issue closed by mistake disappears without notice. The rule first came from a card wrongly moved from Done to In progress (lyrics-display PR 24, dev-website-2026 PR 56). That workflow is off now, so the closing keyword is the reason the rule remains. A keyword in a commit message closes the issue on merge too, so the rule covers commits, and the implement-outcome check enforces it.
+
+## Runtime
+
+Decided with the owner on 2026-11-03 for step 3. The engine's scripts run on Bun, as dev-website-2026's do. `prepare` and `apply` install it with `oven-sh/setup-bun`, so a consumer repo needs nothing extra. **Why:** the scripts and their tests port as they are, and `Bun.YAML` reads `agents.yml` without a dependency.
+
+## Testing the engine
+
+Decided with the owner on 2026-11-03 for step 3.
+
+- **Before a release:** a **public** throwaway repo, `github-agents-sandbox`, with a tiny Bun project, its two secrets and a board. Triage and build test issues there against the branch, check that a host off the allowlist is blocked, then delete it. It's public because harden-runner doesn't enforce on a private repo. Secrets stay secret in a public repo, and the sandbox holds no private content.
+- **On every PR here:** one small `ci.yml` runs `actionlint`, `shellcheck`, `bun test` and a typecheck of `scripts/`. This repo still has no issue automation.
 
 ## Versioning
 
