@@ -81,6 +81,25 @@ describe("execute", () => {
     expect(go(handback, { number: 7, isDraft: false, url: "u" }).gh.summary()).toEqual(["pr edit", "pr ready", "labels:+ready-for-human-ready", "status:HITL"]);
   });
 
+  test("a rejected push hands off with a comment instead of failing", () => {
+    const gh = fakeGh({ number: 5, title: "T", body: "B", labels: ["bug", "ready"] });
+    const rejected = () => {
+      throw new Error("git push failed:\n ! [rejected]        refs/agent/auto/issue-5 -> auto/issue-5 (non-fast-forward)");
+    };
+    const log = execute({ plan: pr, tracker: new Tracker("jp/app", gh.run), git: rejected, settings, issue: 5, runUrl: run, screenshots: [] });
+    expect(gh.summary()).toEqual(["issue comment", "labels:+ready-for-human-ready", "status:HITL"]);
+    expect(gh.writes[0]!.input).toContain("The branch moved while this run built, so nothing was pushed. Label `ready` again to rebuild.");
+    expect(log).toContain("push rejected: auto/issue-5 moved");
+  });
+
+  test("any other push error still fails", () => {
+    const gh = fakeGh({ number: 5, title: "T", body: "B" });
+    const broken = () => {
+      throw new Error("git push failed:\nfatal: Authentication failed");
+    };
+    expect(() => execute({ plan: pr, tracker: new Tracker("jp/app", gh.run), git: broken, settings, issue: 5, runUrl: run, screenshots: [] })).toThrow("Authentication failed");
+  });
+
   test("stop: pushes nothing, says why and hands off", () => {
     const { gh, pushes } = go({ path: "stop", reason: "commit abc1234 changes .github/x" });
     expect(pushes).toEqual([]);

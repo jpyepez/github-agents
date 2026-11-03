@@ -80,6 +80,16 @@ describe("Tracker", () => {
     expect(new Tracker("jp/app", run).statusField(4)).toEqual({ projectId: "PVT_1", fieldId: "F1", options: [{ id: "o1", name: "Inbox" }] });
   });
 
+  test("counts a job's started steps", () => {
+    const { run } = fake({
+      "api --paginate": JSON.stringify([{ jobs: [{ name: "implement / agent", status: "completed", steps: [] }, { name: "implement / apply", status: "in_progress", steps: [{ started_at: "t" }, { started_at: null }] }] }]),
+    });
+    expect(new Tracker("jp/app", run).runJobs(9, 1)).toEqual([
+      { name: "implement / agent", status: "completed", startedSteps: 0 },
+      { name: "implement / apply", status: "in_progress", startedSteps: 1 },
+    ]);
+  });
+
   test("fails on a board without a Status field", () => {
     const { run } = fake({ "project view": "PVT_1", "project field-list": JSON.stringify({ fields: [] }) });
     expect(() => new Tracker("jp/app", run).statusField(4)).toThrow("Project 4 has no Status field with columns.");

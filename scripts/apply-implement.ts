@@ -22,6 +22,7 @@ import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, 
 import { join } from "node:path";
 import { setStatus } from "./board-status";
 import { checkOutcome, type Outcome, type OutcomeInputs, readBundle } from "./implement-outcome";
+import { agentNeverStarted } from "./runs";
 import type { Settings } from "./settings";
 import { type PullRequest, Tracker } from "./tracker";
 
@@ -106,19 +107,30 @@ export function execute(o: {
   const log: string[] = [];
   const existing: PullRequest | null = tracker.openPr(branch);
 
-  const push = () => {
-    // Not forced: the agent built on top of origin/<branch>, if there was one.
-    o.git(["push", "origin", `refs/agent/${branch}:refs/heads/${branch}`]);
-    log.push(`pushed ${branch}`);
-  };
   const handOff = () => {
     tracker.editLabels(issue, [settings.labels["ready-for-human"]], [settings.labels.ready]);
     const name = setStatus(tracker, settings, issue, "hitl");
     log.push(`handed off: ${settings.labels.ready} → ${settings.labels["ready-for-human"]}${name ? `, Status → ${name}` : ""}`);
   };
+  // Not forced: the agent built on top of origin/<branch>, if there was one. A rejected push
+  // means the branch moved while this run built (another run pushed first).
+  const push = (): boolean => {
+    try {
+      o.git(["push", "origin", `refs/agent/${branch}:refs/heads/${branch}`]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/non-fast-forward|\[rejected\]|fetch first/.test(message)) throw error;
+      tracker.comment(issue, `The branch moved while this run built, so nothing was pushed. Label \`${settings.labels.ready}\` again to rebuild.\n\nRun: ${o.runUrl}`);
+      log.push(`push rejected: ${branch} moved`);
+      handOff();
+      return false;
+    }
+    log.push(`pushed ${branch}`);
+    return true;
+  };
 
   if (p.path === "pr") {
-    push();
+    if (!push()) return log;
     let number: number;
     if (existing) {
       tracker.editPr(existing.number, p.title, p.body);
@@ -138,7 +150,7 @@ export function execute(o: {
   }
 
   if (p.path === "handback") {
-    if (p.commits > 0) push();
+    if (p.commits > 0 && !push()) return log;
     const body = `${p.body}\n\nRun: ${o.runUrl}`;
     if (existing) {
       tracker.editPr(existing.number, p.title, body);
@@ -175,6 +187,11 @@ if (import.meta.main) {
     const branch = `${settings.branch_prefix}${issue}`;
     const runUrl = env.RUN_URL ?? "";
     const agentResult = env.AGENT_RESULT || "unknown";
+    // A newer run for the issue replaced this one before its agent started: nothing to do.
+    if (env.AGENT_RESULT !== "success" && agentNeverStarted(new Tracker(env.GITHUB_REPOSITORY ?? ""), Number(env.GITHUB_RUN_ID), Number(env.GITHUB_RUN_ATTEMPT || 1))) {
+      console.log(`::notice::#${issue}: the agent job never started (${agentResult}), so nothing was written.`);
+      process.exit(0);
+    }
 
     const bundlePath = join(agentDir, "commits.bundle");
     const bundle = existsSync(bundlePath) ? readBundle(process.cwd(), bundlePath, branch, settings.base) : null;

@@ -36,6 +36,9 @@ export type PullRequest = { number: number; isDraft: boolean; url: string };
 
 export type StatusField = { projectId: string; fieldId: string; options: { id: string; name: string }[] };
 
+export type WorkflowRun = { id: number; title: string };
+export type Job = { name: string; status: string; startedSteps: number };
+
 export class Tracker {
   readonly owner: string;
 
@@ -119,6 +122,33 @@ export class Tracker {
 
   repoLabels(): string[] {
     return this.json<{ name: string }[]>(["label", "list", "--repo", this.repo, "--limit", "1000", "--json", "name"]).map((l) => l.name);
+  }
+
+  // Actions runs, for the engine's own bookkeeping (prepare's busy check, apply's never-started check).
+
+  // Runs not yet finished. The callers' run-name holds the issue number, so the title finds them.
+  unfinishedRuns(): WorkflowRun[] {
+    const runs: WorkflowRun[] = [];
+    for (const status of ["queued", "in_progress", "waiting", "pending", "requested"]) {
+      const page = this.json<{ workflow_runs: { id: number; display_title: string }[] }>([
+        "api", `repos/${this.repo}/actions/runs?status=${status}&per_page=100`,
+      ]);
+      for (const r of page.workflow_runs) runs.push({ id: r.id, title: r.display_title });
+    }
+    return runs;
+  }
+
+  // The jobs of one attempt of a run. A step counts as started once it has a started_at.
+  runJobs(runId: number, attempt?: number): Job[] {
+    const path = attempt ? `repos/${this.repo}/actions/runs/${runId}/attempts/${attempt}/jobs` : `repos/${this.repo}/actions/runs/${runId}/jobs`;
+    const pages = this.json<{ jobs: { name: string; status: string; steps?: { started_at: string | null }[] }[] }[]>([
+      "api", "--paginate", "--slurp", `${path}?per_page=100`,
+    ]);
+    return pages.flatMap((p) => p.jobs).map((j) => ({
+      name: j.name,
+      status: j.status,
+      startedSteps: (j.steps ?? []).filter((s) => s.started_at).length,
+    }));
   }
 
   // Pull requests

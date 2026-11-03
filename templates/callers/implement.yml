@@ -1,4 +1,6 @@
 name: Implement
+# The engine finds runs for the same issue by this title.
+run-name: Implement issue ${{ github.event.issue.number || inputs.issue }}
 
 # Calls github-agents' Implement when the owner labels one of their issues, or by hand:
 #   gh workflow run implement.yml -f issue=<n>

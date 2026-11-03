@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { setStatus } from "./board-status";
 import type { CheckResult } from "./check";
 import { endpoints } from "./egress";
+import { busyRun } from "./runs";
 import { isSkipped, type Settings } from "./settings";
 import { type Comment, type Issue, Tracker } from "./tracker";
 import { OUTCOMES } from "./triage-outcome";
@@ -61,6 +62,10 @@ export function implementSkip(o: {
 // after it (the bundle and the upload) still run when the agent times out.
 export function timeouts(minutes: number): { minutes: number; job_minutes: number } {
   return { minutes, job_minutes: minutes + 10 };
+}
+
+export function busyComment(settings: Settings): string {
+  return `A build for this issue is already running; label \`${settings.labels.ready}\` again after it finishes.`;
 }
 
 export function ownerComments(comments: Comment[], owner: string): Comment[] {
@@ -135,6 +140,15 @@ if (import.meta.main) {
     console.log(`#${number} by ${issue.author}, ${issue.state}, labels: ${issue.labels.join(", ") || "none"}`);
     if (skip) {
       console.log(`Skipped: ${skip}.`);
+      output({ go: "false" });
+      process.exit(0);
+    }
+
+    // Another run for this issue already has its agent or apply job queued or running.
+    const other = busyRun(tracker, flow, number, Number(env.GITHUB_RUN_ID));
+    if (other !== null) {
+      if (flow === "implement") tracker.comment(number, busyComment(settings));
+      console.log(`::notice::Skipped: run ${other} is already working on #${number}.`);
       output({ go: "false" });
       process.exit(0);
     }

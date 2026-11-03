@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { setStatus } from "./board-status";
 import type { CheckResult } from "./check";
 import type { Settings } from "./settings";
+import { agentNeverStarted } from "./runs";
 import { type Comment, Tracker } from "./tracker";
 import { DISCLAIMER, labelPlan, statusFor, type TriageDecision, validateTriage, withDisclaimer } from "./triage-outcome";
 
@@ -102,6 +103,11 @@ if (import.meta.main) {
     const settings = JSON.parse(readFileSync(join(prepareDir, "settings.json"), "utf8")) as Settings;
     const check = JSON.parse(readFileSync(join(prepareDir, "check.json"), "utf8")) as CheckResult;
     const { issue } = JSON.parse(readFileSync(join(prepareDir, "context.json"), "utf8")) as { issue: number };
+    // A newer run for the issue replaced this one before its agent started: nothing to do.
+    if (env.AGENT_RESULT !== "success" && agentNeverStarted(new Tracker(env.GITHUB_REPOSITORY ?? ""), Number(env.GITHUB_RUN_ID), Number(env.GITHUB_RUN_ATTEMPT || 1))) {
+      console.log(`::notice::#${issue}: the agent job never started (${env.AGENT_RESULT || "unknown"}), so nothing was written.`);
+      process.exit(0);
+    }
     if (env.AGENT_RESULT !== "success") {
       console.log(`::error::#${issue}: the triage agent didn't finish (${env.AGENT_RESULT || "unknown"}). Nothing was written; re-dispatch Triage.`);
       process.exit(1);

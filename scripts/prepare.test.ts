@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { CheckResult } from "./check";
 import { endpoints } from "./egress";
-import { implementSkip, issueFile, ownerComments, timeouts, triageSkip } from "./prepare";
+import { busyComment, implementSkip, issueFile, ownerComments, timeouts, triageSkip } from "./prepare";
 import { parseSettings } from "./settings";
 import type { Issue } from "./tracker";
 
@@ -69,6 +69,10 @@ describe("issueFile", () => {
 
 test("timeouts give the job 10 minutes past the agent's cap, for the bundle and upload", () => {
   expect(timeouts(120)).toEqual({ minutes: 120, job_minutes: 130 });
+});
+
+test("the busy comment names the repo's ready label", () => {
+  expect(busyComment(parseSettings("labels: { ready: go }\n", {}))).toBe("A build for this issue is already running; label `go` again after it finishes.");
 });
 
 describe("endpoints", () => {

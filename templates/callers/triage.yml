@@ -1,4 +1,6 @@
 name: Triage
+# The engine finds runs for the same issue by this title.
+run-name: Triage issue ${{ github.event.issue.number || inputs.issue }}
 
 # Calls github-agents' Triage on each issue the owner opens, or by hand:
 #   gh workflow run triage.yml -f issue=<n>

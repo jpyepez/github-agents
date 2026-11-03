@@ -142,13 +142,21 @@ Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, 
 
 **Concurrency:** `concurrency` sits on the `agent` and `apply` jobs, never on the workflow. Both jobs run only when `prepare` outputs that the run should go ahead, so skip runs never enter a group. Triage and implement both use one group per issue, so builds for different issues run in parallel, and only a second run for the same issue replaces a pending one, which is wanted. A single implement group per repo would drop builds: with three issues marked `ready` at once, the first builds, the second waits, and the third cancels the second. The cost: parallel builds use more Claude quota at once, and two PRs may conflict at merge, which review handles as with any two PRs. Each job has its own group (for example `implement-agent-<issue>` and `implement-apply-<issue>`), so another run's `agent` can't take the group between this run's two jobs and leave its `apply` pending. **Why:** the caller starts a run on every label event by the owner, and `apply` sets labels with `OWNER_PAT`, acting as the owner, so each triage starts several skip runs. GitHub keeps only one pending run per group, and a newer pending run cancels the older one. A `ready` run waiting behind a busy implement run could be cancelled by a skip run from a label added seconds later, and the build would be lost without a trace. Whether a job skipped by its `if` enters its concurrency group is untested; the v1 sandbox run settles it.
 
+**Runs for the same issue.** Concurrency alone isn't enough: a queued build for an issue starts as soon as the earlier build's agent finishes, before that run's `apply` has pushed, so it would branch from stale code. So:
+
+- **`prepare` skips while another run is working on the issue.** It looks for another unfinished run with the same title (the callers' `run-name` holds the issue number) whose `agent` or `apply` job is queued or running. Implement then posts a fixed comment: "A build for this issue is already running; label `ready` again after it finishes." Triage skips with a notice only. **The trade-off:** a second `ready` during a build is ignored with a comment, not queued.
+- **`apply` writes nothing when its agent job never started**, which it reads from the Actions API: no step of the agent job has a start time, as when a newer run replaced it in the queue. A job that started and then timed out or failed still hands off. Guessing from "cancelled and no artifact" would be wrong, since a timeout also leaves no artifact.
+- **A rejected push hands off.** If the branch moved anyway (two `prepare`s racing past the check), the push is rejected as non-fast-forward, and `apply` comments "the branch moved; label `ready` again to rebuild" and hands off, instead of failing without one.
+
+The per-issue concurrency groups stay, as a backstop for two `prepare`s racing.
+
 ### Egress
 
 Decided with the owner on 2026-11-03 for step 3. The `agent` job's first step is `step-security/harden-runner` (v2.22.3 or later), with:
 
 - `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs. The workflows take an `egress-policy` input for that pass. It defaults to `block`, and the byte-identical callers never set it; only the sandbox's caller passes `audit`.
 - `disable-telemetry: true`, so run data doesn't go to StepSecurity. It only works with `block`.
-- `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`.
+- `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`. The browser walk installs Chromium with plain `playwright install chromium`, which needs Playwright 1.64 or later on `ubuntu-latest`, now Ubuntu 26.04 (step 3's sandbox run); 1.56 refuses it.
 
 **Why harden-runner:** it enforces host-wide, so Claude's shell is covered, and it's free for public repos, which every consumer repo will be by step 5. It doesn't enforce on a private repo without a subscription, and it has fail-open cases in its source. The v1 test checks that a host off the list is blocked. The fallback is `bullfrogsec/bullfrog`. Details and sources are in [research](research.md#verified-in-the-docs).
 
