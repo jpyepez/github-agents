@@ -80,7 +80,7 @@ Every key is optional. **A missing setting makes the engine more cautious, never
 | `browser` | on when `test:e2e` exists | the headless walk and PR screenshots |
 | `categories` | `bug`, `enhancement`, `documentation` | |
 | `labels` | the default names (`ready`, `needs-info`, `ready-for-human`, `wontfix`, `needs-triage`) | `setup-work` allows overrides; the scripts must honour them |
-| `columns` | Inbox, Ready, In progress, HITL, Done | |
+| `columns` | Inbox, HITL, Ready, In progress, Done | |
 | `skip_labels` | `notes`, `spec`, `pathfinder:*` | triage leaves these alone |
 | `caps` | triage 30 turns / 30 min; implement 80 turns / 120 min | |
 | `base` | `main` | |
@@ -131,6 +131,19 @@ It runs first in every workflow, before Claude starts:
 ## Tracker
 
 GitHub only. Every label, board and comment call goes through `scripts/tracker.ts`, and the prompts use the operations named in the repo's `docs/agents/issue-tracker.md` rather than raw `gh` commands. A second tracker gets built only when a real repo needs one. A local `.work/` tracker has no events, so it would need a scheduled scan.
+
+## Board
+
+Each repo has one user-owned board. These are its settings and the reasons for them.
+
+- **Columns:** Inbox, HITL, Ready, In progress, Done. HITL sits right after Inbox because most HITL cards come straight out of triage, next to Ready. Hand-backs are the rarer path. Scripts look columns up by name, so the order only changes how the board reads.
+- **Built-in workflows on:** Auto-add to project (`is:issue`, issues only), Item added to project → Inbox, Item closed → Done, Pull request merged → Done, Auto-close issue, Auto-add sub-issues to project.
+  - **Issues only**, because a PR is how an issue gets done, not separate work. That gives one card per piece of work, and the engine moves issues, not PRs.
+- **Pull request linked to issue is off** on every board.
+  - Only a claim moves a card to In progress: implement's claim step, or "claim before working".
+  - That workflow was the one card move the Status table can't explain, and a stray closing keyword could pull a card out of HITL.
+  - It also works against the privilege split, in which shell steps set Status from validated files.
+- **The `Closes` rule stays:** `Closes #<n>` on its own line, and any other issue written as "issue N". A closing keyword in any tense, anywhere in a PR description, closes that issue on merge, whatever the board's workflows are (see [research](research.md#verified-in-the-docs)), and an issue closed by mistake disappears without notice. The rule first came from a card wrongly moved from Done to In progress (lyrics-display PR 24, dev-website-2026 PR 56). That workflow is off now, so the closing keyword is the reason the rule remains.
 
 ## Versioning
 

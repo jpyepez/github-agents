@@ -6,15 +6,20 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 
 1. **Create the repo**
    - [x] Local folder `~/Hub/Areas/Tooling/github-agents` with `README.md`, `LICENSE` (MIT), `CLAUDE.md` and `docs/`
-   - [ ] `gh repo create jpyepez/github-agents --public --source . --push`, with description "Reusable GitHub workflows that triage issues and implement ready ones with Claude"
-   - [ ] Merge settings: squash only, `PR_TITLE` / `PR_BODY`, delete branches
+   - [x] `gh repo create jpyepez/github-agents --public --source . --push`, with description "Reusable GitHub workflows that triage issues and implement ready ones with Claude"
+   - [x] Merge settings: squash only, `PR_TITLE` / `PR_BODY`, delete branches
    - [x] repo-scout alias `github-agents`
-   - [ ] Owner runs `/setup-work`: GitHub tracker, default labels, `docs/agents/`. Issues and a board, triaged by hand; no automation on this repo.
-2. **Plumbing test** in a throwaway private repo, deleted afterwards. A small reusable "hello" workflow settles every open item in [research.md](research.md#untested-step-2-settles-these).
+   - [x] Board 4: Status columns Inbox, HITL, Ready, In progress, Done; built-in workflows on, except Pull request linked to issue, which is off on boards 1, 3 and 4
+   - [x] Owner runs `/setup-work`: GitHub tracker, default labels (`ready-for-agent` as `ready`), `docs/agents/`. Issues and [board 4](https://github.com/users/jpyepez/projects/4), triaged by hand; no automation on this repo.
+   - [ ] Merge PR 1 (agent skills config and board docs)
+2. **Plumbing test** in `github-agents-sandbox` (private, deleted afterwards). A small reusable "hello" workflow settles every open item in [research.md](research.md#untested-step-2-settles-these). The sandbox needs:
+   - its own small board (Inbox, HITL, Ready, In progress, Done) for the board-edit test
+   - the secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN`
+   - a fine-grained test PAT limited to the sandbox repo, to see whether it can move cards on a user-owned board
 3. **Engine v1**: triage and implement as `workflow_call`, the check step, `.github/agents.yml`, the privilege split, owner-only comments, the tracker seam. Port from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
-6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`).
+6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off.
 7. **`doctor`**, then the **`setup-github-agents` skill**, written from what steps 5 and 6 actually needed.
 
 ## Consumer repos
@@ -29,6 +34,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 - [ ] Step 5: migration PR, which closes issue 31 (in HITL):
   - callers and `agents.yml` (`board: 3`, `automation: implement`, `checks: [lint, typecheck, test, test:e2e]`)
   - remove the old copies
+  - its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off
   - move the hand-back items inlined in its prompts into `docs/agents/issue-tracker.md`
   - add `docs/git-workflow.md` with conventional commits. Settle the scopes first: issue 31's triage found nothing covers print, storage, PWA or deps.
 
@@ -56,6 +62,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
   - a `v2` only for breaking changes
   - a second tracker only when a real repo needs one
   - CI as a shared workflow, if the same CI shape proves out
+  - an "In review" column between In progress and Done, only if the owner starts missing ready bot PRs. Until then, ready PRs show as In progress, and reviews wait in the PR list.
 - **Nice to have**:
   - link the engine from dev-website-2026
   - a work-owned version, built from this as a reference, when a job calls for it
