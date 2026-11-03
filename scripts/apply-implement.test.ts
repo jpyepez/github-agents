@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execute, type Plan, plan, wipDoc } from "./apply-implement";
-import { fakeGh } from "./fake-gh";
+import { fakeGh } from "./testing/fake-gh";
 import type { OutcomeInputs } from "./implement-outcome";
 import { parseSettings } from "./settings";
 import { Tracker } from "./tracker";

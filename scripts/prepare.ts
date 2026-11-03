@@ -10,7 +10,7 @@
 //
 // Env: ISSUE, LABEL (implement: the label that started the run), OWNER (the repo owner),
 // GITHUB_EVENT_NAME, GITHUB_REPOSITORY, GH_TOKEN (OWNER_PAT) and GITHUB_OUTPUT.
-// Outputs: go, and when go is true: turns, minutes, endpoints, branch, base, browser, install,
+// Outputs: go, and when go is true: turns, minutes (the claude step), job_minutes, endpoints, branch, base, browser, install,
 // author_name and author_email.
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -55,6 +55,12 @@ export function implementSkip(o: {
   if (isSkipped(settings, issue.labels)) return "has a skip label";
   if (o.subIssues > 0) return "a spec parent, with sub-issues";
   return null;
+}
+
+// The cap is the claude step's own timeout. The job gets 10 more minutes, so the steps
+// after it (the bundle and the upload) still run when the agent times out.
+export function timeouts(minutes: number): { minutes: number; job_minutes: number } {
+  return { minutes, job_minutes: minutes + 10 };
 }
 
 export function ownerComments(comments: Comment[], owner: string): Comment[] {
@@ -155,7 +161,8 @@ if (import.meta.main) {
     output({
       go: "true",
       turns: String(caps.turns),
-      minutes: String(caps.minutes),
+      minutes: String(timeouts(caps.minutes).minutes),
+      job_minutes: String(timeouts(caps.minutes).job_minutes),
       endpoints: endpoints(settings, flow),
       branch: `${settings.branch_prefix}${number}`,
       base: settings.base,

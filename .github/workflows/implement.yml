@@ -39,6 +39,7 @@ jobs:
       go: ${{ steps.prepare.outputs.go }}
       turns: ${{ steps.prepare.outputs.turns }}
       minutes: ${{ steps.prepare.outputs.minutes }}
+      job_minutes: ${{ steps.prepare.outputs.job_minutes }}
       endpoints: ${{ steps.prepare.outputs.endpoints }}
       install: ${{ steps.prepare.outputs.install }}
       branch: ${{ steps.prepare.outputs.branch }}
@@ -91,7 +92,7 @@ jobs:
       group: implement-agent-${{ inputs.issue }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(needs.prepare.outputs.minutes) }}
+    timeout-minutes: ${{ fromJSON(needs.prepare.outputs.job_minutes) }}
     permissions:
       contents: read
       issues: read
@@ -149,7 +150,9 @@ jobs:
       - name: Install Chromium for the browser walk
         if: needs.prepare.outputs.browser == 'true'
         run: bunx playwright install chromium
+      # The cap on the step itself, so a timed-out agent still leaves its work for `apply`.
       - id: claude
+        timeout-minutes: ${{ fromJSON(needs.prepare.outputs.minutes) }}
         uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

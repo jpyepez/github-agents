@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { applyTriage, originalBody, originalNote } from "./apply-triage";
-import { fakeGh } from "./fake-gh";
+import { fakeGh } from "./testing/fake-gh";
 import { parseSettings } from "./settings";
 import { Tracker } from "./tracker";
 import { DISCLAIMER } from "./triage-outcome";

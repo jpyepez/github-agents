@@ -1,5 +1,5 @@
 // A fake gh for tests: answers reads from a small model of one issue and records writes.
-import type { Run } from "./tracker";
+import type { Run } from "../tracker";
 
 export type FakeIssue = {
   number: number; title: string; body: string; state?: "OPEN" | "CLOSED"; author?: string;

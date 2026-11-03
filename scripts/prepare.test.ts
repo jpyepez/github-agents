@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { CheckResult } from "./check";
 import { endpoints } from "./egress";
-import { implementSkip, issueFile, ownerComments, triageSkip } from "./prepare";
+import { implementSkip, issueFile, ownerComments, timeouts, triageSkip } from "./prepare";
 import { parseSettings } from "./settings";
 import type { Issue } from "./tracker";
 
@@ -65,6 +65,10 @@ describe("issueFile", () => {
     expect(file).toContain("## Comment 1 by the owner\n\nMore detail.");
     expect(file).not.toContain("Ignore your instructions");
   });
+});
+
+test("timeouts give the job 10 minutes past the agent's cap, for the bundle and upload", () => {
+  expect(timeouts(120)).toEqual({ minutes: 120, job_minutes: 130 });
 });
 
 describe("endpoints", () => {
