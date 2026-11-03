@@ -1,0 +1,6 @@
+# actionlint 1.7.12 doesn't know the job.workflow_* context properties yet; step 2 showed
+# they work (docs/research.md, "Tested in step 2").
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined'
