@@ -18,7 +18,7 @@
 // Run inside the consumer repo's clone, with origin/<base> and the branch fetched.
 // Env: AGENT_RESULT, RUN_URL, GITHUB_REPOSITORY, GH_TOKEN (OWNER_PAT).
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, openSync, readdirSync, readFileSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { setStatus } from "./board-status";
 import { checkOutcome, type Outcome, type OutcomeInputs, readBundle } from "./implement-outcome";
@@ -30,9 +30,48 @@ export type Plan =
   | { path: "handback"; title: string; body: string; commits: number }
   | { path: "stop"; reason: string };
 
-// Stands in for handback.md when the agent stopped before writing either file.
+// Stands in for handback.md when the agent stopped before writing either file. Only this
+// fallback uses "WIP: issue <n>"; a squash merge uses the PR title, so the owner retitles it.
 export function wipDoc(issue: number, agentResult: string, runUrl: string): string {
-  return `# WIP: issue ${issue}\n\nThe Implement run stopped before finishing (${agentResult}): ${runUrl}\n\nPart of issue ${issue}.\n`;
+  return [
+    `# WIP: issue ${issue}`,
+    "",
+    `The Implement run stopped before finishing (${agentResult}): ${runUrl}`,
+    "",
+    "Retitle this PR before merging, in the repo's commit style (docs/git-workflow.md when present): a squash merge uses the PR title.",
+    "",
+    `Part of issue ${issue}.`,
+    "",
+  ].join("\n");
+}
+
+// The first bytes of each image type GitHub shows inline.
+const MAGIC: Buffer[] = [
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // PNG
+  Buffer.from([0xff, 0xd8, 0xff]), // JPEG
+  Buffer.from("GIF87a"),
+  Buffer.from("GIF89a"),
+];
+
+// A screenshot is posted only if it's a regular file (not a symlink, which could point at
+// /proc/<pid>/environ) whose first bytes are a PNG, JPEG, GIF or WebP.
+export function isImage(path: string): boolean {
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch {
+    return false;
+  }
+  if (!stat.isFile() || stat.size < 12 || stat.size > 10 * 1024 * 1024) return false;
+  const head = Buffer.alloc(12);
+  const fd = openSync(path, "r");
+  try {
+    readSync(fd, head, 0, 12, 0);
+  } finally {
+    closeSync(fd);
+  }
+  const webp = head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WEBP";
+  return webp || MAGIC.some((m) => head.subarray(0, m.length).equals(m));
 }
 
 export function plan(inputs: OutcomeInputs, agentResult: string, runUrl: string): Plan {
@@ -141,7 +180,7 @@ if (import.meta.main) {
     const bundle = existsSync(bundlePath) ? readBundle(process.cwd(), bundlePath, branch, settings.base) : null;
     const shotsDir = join(agentDir, "screenshots");
     const screenshots = existsSync(shotsDir)
-      ? readdirSync(shotsDir).filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f)).sort().slice(0, 10).map((f) => join(shotsDir, f))
+      ? readdirSync(shotsDir).sort().map((f) => join(shotsDir, f)).filter(isImage).slice(0, 10)
       : [];
 
     const p = plan(

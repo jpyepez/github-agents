@@ -25,7 +25,10 @@ describe("plan", () => {
   });
   test("a run that didn't finish comes back as work in progress, even with a pr.md", () => {
     expect(plan(inputs, "failure", run)).toEqual({
-      path: "handback", title: "WIP: issue 5", body: `The Implement run stopped before finishing (failure): ${run}\n\nPart of issue 5.`, commits: 1,
+      path: "handback",
+      title: "WIP: issue 5",
+      body: `The Implement run stopped before finishing (failure): ${run}\n\nRetitle this PR before merging, in the repo's commit style (docs/git-workflow.md when present): a squash merge uses the PR title.\n\nPart of issue 5.`,
+      commits: 1,
     });
     expect(plan({ ...inputs, pr: null, bundleHeads: null, commits: [] }, "cancelled", run)).toMatchObject({ path: "handback", commits: 0 });
   });
