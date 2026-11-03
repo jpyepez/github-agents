@@ -85,6 +85,7 @@ Every key is optional. **A missing setting makes the engine more cautious, never
 | `caps` | triage 30 turns / 30 min; implement 80 turns / 120 min | |
 | `base` | `main` | |
 | `branch_prefix` | `auto/issue-` | |
+| `egress` | none | hosts added to the agent job's [egress](#egress) allowlist, like `example.com` or `*.cdn.example.com:443` |
 
 Example, lyrics-display:
 
@@ -105,7 +106,7 @@ checks: [lint, typecheck, test, test:e2e]
 Consumer repos are public, so anyone can comment on the owner's issues. A rule in the prompt telling the agent to ignore those comments is likely to hold, never certain. The protection comes from what the agent can do:
 
 - **The agent holds no write token.** It writes files and the shell steps validate and apply them.
-  - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status.
+  - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status. On a re-triage whose outcome isn't `ready`, the shell restores the body from the `Original note:` comment, since the spec no longer applies. `decision.json` names the outcome by role (`ready`, `needs-info`, `ready-for-human`, `wontfix`), and the shell maps it to the repo's label.
   - Implement commits locally and writes `pr.md` (title and description), or `handback.md`, plus screenshots. The shell pushes the branch, opens or updates the PR, posts the screenshots, and hands off to HITL when needed.
 - **The agent's job keeps `GITHUB_TOKEN` read-only**, for example `contents: read` and `issues: read`. The agent sees the action's `github_token` in its environment, and `permissions` apply to a whole job, not to one step, so every job that runs the agent stays read-only. All writes go through `OWNER_PAT` in shell steps: push, PR, labels, comments and board. That also suits GitHub's rule that pushes and labels made with `GITHUB_TOKEN` don't start other workflows. See [research](research.md#tested-in-step-2).
 - **The agent's job limits egress** to the hosts it needs, because the OAuth token can be read from the agent's shell (see [research](research.md#tested-in-step-2)). See [Egress](#egress) below.
@@ -151,8 +152,9 @@ It runs first in every workflow, before Claude starts:
 | --- | --- |
 | A secret missing or empty | fail, naming it |
 | Board | continue, skip Status updates |
+| Board set in `agents.yml` but unreadable, or missing a column | fail, listing its columns: a typo should be loud |
 | Labels | fail, listing them; the setup skill creates them |
-| Ready bar or hand-back list | triage runs but never applies `ready` |
+| Ready bar or hand-back list | triage runs but never applies `ready`: the outcome check rejects a `ready` decision rather than downgrading it, since the agent's comment argues for `ready` |
 | `docs/git-workflow.md` | plain sentences |
 | Tracker isn't GitHub (`docs/agents/issue-tracker.md`) | fail with a clear message |
 
