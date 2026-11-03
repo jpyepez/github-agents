@@ -193,7 +193,7 @@ Decided with the owner on 2026-11-03 for step 3. The engine's scripts run on Bun
 
 Decided with the owner on 2026-11-03 for step 3.
 
-- **Before a release:** a **public** throwaway repo, `github-agents-sandbox`, with a tiny Bun project, its two secrets and a board. Triage and build test issues there against the branch, check that a host off the allowlist is blocked, then delete it. It's public because harden-runner doesn't enforce on a private repo. Secrets stay secret in a public repo, and the sandbox holds no private content.
+- **Before a release:** a **public** throwaway repo, `github-agents-sandbox`, with a tiny Bun project, its two secrets and a board. Triage and build test issues there against the branch, check that a host off the allowlist is blocked, then delete it. It's public because harden-runner doesn't enforce on a private repo. Secrets stay secret in a public repo, and the sandbox holds no private content. The sandbox always uses throwaway, short-lived tokens: a classic `OWNER_PAT` that expires in 7 days and a fresh Claude OAuth token, both revoked at teardown. Never the real ones, because the test exercises leak paths on a public repo.
 - **On every PR here:** one small `ci.yml` runs `actionlint`, `shellcheck`, `bun test` and a typecheck of `scripts/`. This repo still has no issue automation.
 
 ## Versioning

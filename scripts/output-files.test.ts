@@ -61,6 +61,7 @@ describe("the agent job's cleanup step", () => {
   });
 });
 
-test("the WIP fallback asks the owner to retitle before merging", () => {
+test("the WIP fallback asks the owner to retitle before merging, only when there's a PR", () => {
   expect(wipDoc(5, "failure", "https://run")).toContain("Retitle this PR before merging, in the repo's commit style");
+  expect(wipDoc(5, "failure", "https://run", false)).not.toContain("Retitle");
 });

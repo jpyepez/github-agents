@@ -32,14 +32,14 @@ export type Plan =
 
 // Stands in for handback.md when the agent stopped before writing either file. Only this
 // fallback uses "WIP: issue <n>"; a squash merge uses the PR title, so the owner retitles it.
-export function wipDoc(issue: number, agentResult: string, runUrl: string): string {
+// The retitle line only goes in when there are commits, so a draft PR gets opened.
+export function wipDoc(issue: number, agentResult: string, runUrl: string, hasCommits = true): string {
   return [
     `# WIP: issue ${issue}`,
     "",
     `The Implement run stopped before finishing (${agentResult}): ${runUrl}`,
     "",
-    "Retitle this PR before merging, in the repo's commit style (docs/git-workflow.md when present): a squash merge uses the PR title.",
-    "",
+    ...(hasCommits ? ["Retitle this PR before merging, in the repo's commit style (docs/git-workflow.md when present): a squash merge uses the PR title.", ""] : []),
     `Part of issue ${issue}.`,
     "",
   ].join("\n");
@@ -80,7 +80,7 @@ export function plan(inputs: OutcomeInputs, agentResult: string, runUrl: string)
   const finished = agentResult === "success" && hasDocs;
   const checked: Outcome = finished
     ? checkOutcome(inputs)
-    : checkOutcome({ ...inputs, pr: null, handback: wipDoc(inputs.issue, agentResult, runUrl) });
+    : checkOutcome({ ...inputs, pr: null, handback: wipDoc(inputs.issue, agentResult, runUrl, inputs.commits.length > 0) });
   if (!checked.pass) return { path: "stop", reason: checked.reason };
   return { path: checked.kind, title: checked.title, body: checked.body, commits: checked.commits };
 }

@@ -3,7 +3,9 @@
 // requirements and what claude-code-action and setup-bun download; agents.yml's `egress`
 // adds to them. harden-runner itself always allows the Actions hosts (artifacts, cache).
 //
-// Step 3's audit pass checks this list against a real run.
+// Step 3's audit pass (docs/research.md, "Tested in step 3") checked this list against real
+// triage and implement runs. platform.claude.com wasn't called there, but Claude Code's
+// sign-in docs list it.
 
 import type { Settings } from "./settings";
 
@@ -14,13 +16,12 @@ export const DEFAULT_HOSTS = [
   "downloads.claude.ai", // the Claude Code binary
   "github.com", // git and gh
   "api.github.com", // gh, and claude-code-action's own calls
-  "objects.githubusercontent.com", // release downloads (setup-bun)
-  "release-assets.githubusercontent.com", // release downloads (setup-bun)
+  "release-assets.githubusercontent.com", // release downloads (setup-bun, Playwright)
   "registry.npmjs.org", // bun install, for the action and the repo
 ];
 
 // Playwright's browser downloads, for the browser walk.
-export const BROWSER_HOSTS = ["cdn.playwright.dev", "playwright.download.prss.microsoft.com"];
+export const BROWSER_HOSTS = ["cdn.playwright.dev", "playwright.download.prss.microsoft.com", "storage.googleapis.com"];
 
 const withPort = (host: string) => (/:\d+$/.test(host) ? host : `${host}:443`);
 
