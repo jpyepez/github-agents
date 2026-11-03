@@ -97,7 +97,7 @@ checks: [lint, typecheck, test, test:e2e]
 
 ## Rules the agent reads, with fallbacks
 
-- **Commit and PR title style**: follow `docs/git-workflow.md`; without it, a plain imperative sentence. The draft-PR title the shell step writes follows the same setting (`WIP: issue <n>` when plain). A doc rather than a switch, because conventional commits also need each repo's scopes.
+- **Commit and PR title style**: follow `docs/git-workflow.md`; without it, a plain imperative sentence. `pr.md` and `handback.md` titles follow the same setting. Only the shell's fallback, for a run that stopped before writing either file, uses `WIP: issue <n>`, and its draft PR's body asks the owner to retitle it in the repo's style before merging, since a squash merge uses the PR title. A doc rather than a switch, because conventional commits also need each repo's scopes.
 - **Ready bar**: without one, triage never applies `ready`, so nothing builds unattended. Every criterion must be checkable by a test, a screenshot, **or, for config- and docs-only changes, by reading the diff**. The baseline run on lyrics-display issue 30 showed the old bar made config-only tickets impossible to mark `ready`.
 - **Hand-back list**: without one, a strict built-in default: `.github/`, secrets, deploy config, new dependencies, storage schema and migrations.
 
@@ -119,6 +119,10 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
   - Step 2's agent-environment test found `OWNER_PAT` unreachable from the agent's shell, so the classic token stands. Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards.
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
+
+**The output scan.** `apply` publishes the agent's output on a public repo at once: comments, the spec, the PR body, commits, screenshots. Before it writes anything, a step of its own, the only one with `CLAUDE_CODE_OAUTH_TOKEN` in its env, scans all of it for the token: every output file, every screenshot, and every commit's message and diff. It looks for the plain token, base64 (standard and url-safe, at all three offsets) and percent-encoding. A hit writes nothing and fails, naming the file but never the value. The agent job also deletes anything in its output that isn't a regular file before upload, and `apply` posts a screenshot only if it's a regular file with an image's first bytes, so a symlink to `/proc/<pid>/environ` can't be uploaded.
+
+**What's left.** A determined agent could still disguise the token (split it, or transform it some other way) and get it past the scan. Claude Code needs the token in its own process, so it can't be fully hidden from the agent's shell. What remains is owner-only input, GitHub's secret scanning on public repos, and revoking the token if it leaks.
 
 ### Pinned actions
 
