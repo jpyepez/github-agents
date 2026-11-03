@@ -175,6 +175,7 @@ jobs:
           path: ${{ runner.temp }}/out
       # The only step with the OAuth token in its env (docs/design.md, privilege split).
       - name: Scan the agent's output for the OAuth token
+        id: scan
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: bun engine/scripts/scan-output.ts triage "$RUNNER_TEMP/out"
@@ -182,3 +183,9 @@ jobs:
         env:
           AGENT_RESULT: ${{ needs.agent.result }}
         run: bun engine/scripts/apply-triage.ts "$RUNNER_TEMP/in" "$RUNNER_TEMP/out"
+      # On a scan hit: a fixed comment with none of the agent's output, and HITL.
+      - name: Safety stop
+        if: failure() && steps.scan.outcome == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun engine/scripts/safety-stop.ts triage "$RUNNER_TEMP/in"

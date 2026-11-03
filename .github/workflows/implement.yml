@@ -230,6 +230,7 @@ jobs:
           path: ${{ runner.temp }}/out
       # The only step with the OAuth token in its env (docs/design.md, privilege split).
       - name: Scan the agent's output and commits for the OAuth token
+        id: scan
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ISSUE: ${{ inputs.issue }}
@@ -243,3 +244,9 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           bun .github-agents/scripts/apply-implement.ts "$RUNNER_TEMP/in" "$RUNNER_TEMP/out"
+      # On a scan hit: a fixed comment with none of the agent's output, and HITL.
+      - name: Safety stop
+        if: failure() && steps.scan.outcome == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun .github-agents/scripts/safety-stop.ts implement "$RUNNER_TEMP/in"
