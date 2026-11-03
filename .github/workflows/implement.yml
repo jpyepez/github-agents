@@ -172,6 +172,11 @@ jobs:
           else
             echo "No commits on $BRANCH."
           fi
+      # Symlinks (say, to /proc/<pid>/environ) and anything else that isn't a regular file
+      # never reach the artifact. `apply` checks again, since the agent ran in this job.
+      - name: Drop anything in the output that isn't a regular file
+        if: always()
+        run: find "$RUNNER_TEMP/out" -mindepth 1 ! -type f ! -type d -print -delete
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -223,6 +228,14 @@ jobs:
         with:
           name: agent-out
           path: ${{ runner.temp }}/out
+      # The only step with the OAuth token in its env (docs/design.md, privilege split).
+      - name: Scan the agent's output and commits for the OAuth token
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          bun .github-agents/scripts/scan-output.ts implement "$RUNNER_TEMP/out" "$RUNNER_TEMP/in/settings.json" "$ISSUE"
       - name: Check the agent's work, then push, open the PR or hand it back
         env:
           AGENT_RESULT: ${{ needs.agent.result }}
