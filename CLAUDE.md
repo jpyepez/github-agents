@@ -6,7 +6,7 @@ The engine behind auto triage and auto implement on GitHub: reusable workflows (
 
 - [Plan](./docs/plan.md): read first in every session. It holds the build order with each step's status, the consumer-repo items, and the follow-ups. Tick off a step there when it lands.
 - [Design](./docs/design.md): read before writing a workflow, a prompt, a script or the config format. It holds the settled decisions and the reasons behind them.
-- [Research](./docs/research.md): read before relying on GitHub Actions behaviour. It holds the verified facts with their sources, and the ones still untested.
+- [Research](./docs/research.md): read before relying on GitHub Actions behaviour. It holds the verified facts with their sources, and what step 2 tested.
 
 ## Rules
 

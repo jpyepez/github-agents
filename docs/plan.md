@@ -13,6 +13,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - [x] Owner runs `/setup-work`: GitHub tracker, default labels (`ready-for-agent` as `ready`), `docs/agents/`. Issues and [board 4](https://github.com/users/jpyepez/projects/4), triaged by hand; no automation on this repo.
    - [x] Merge PR 1 (agent skills config and board docs), as 821c318
 2. **Plumbing test** in `github-agents-sandbox` (private, deleted afterwards). A small reusable "hello" workflow settles every open item in [research.md](research.md#tested-in-step-2). The sandbox needs the secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN`, and no board.
+   - [x] Done 2026-11-03 in PR 2, as 5f19dc2; results in [research.md](research.md#tested-in-step-2)
 3. **Engine v1**: triage and implement as `workflow_call`, the check step, `.github/agents.yml`, the privilege split, an egress allowlist for the agent's job (harden-runner or similar; step 2 found the OAuth token readable from the agent's shell), owner-only comments, the tracker seam. Port from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
