@@ -1,0 +1,194 @@
+name: Triage
+
+# Triages one issue: one category label, one outcome label, a comment saying why, a spec
+# for `ready`, and the board Status to match. A consumer repo calls it from
+# templates/callers/triage.yml, on an issue being opened or by hand.
+#
+# Three jobs (docs/design.md, "Jobs"): `prepare` and `apply` hold OWNER_PAT; `agent` runs
+# Claude with a read-only GITHUB_TOKEN, no OWNER_PAT and limited egress, and only writes
+# files, which `apply` checks before it writes anything.
+on:
+  workflow_call:
+    inputs:
+      issue:
+        type: number
+        required: true
+      egress-policy:
+        description: harden-runner's policy for the agent job. `audit` is only for finding the allowlist.
+        type: string
+        default: block
+    secrets:
+      OWNER_PAT:
+        required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      go: ${{ steps.prepare.outputs.go }}
+      turns: ${{ steps.prepare.outputs.turns }}
+      minutes: ${{ steps.prepare.outputs.minutes }}
+      job_minutes: ${{ steps.prepare.outputs.job_minutes }}
+      endpoints: ${{ steps.prepare.outputs.endpoints }}
+      install: ${{ steps.prepare.outputs.install }}
+    env:
+      GH_TOKEN: ${{ secrets.OWNER_PAT }}
+      ISSUE: ${{ inputs.issue }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: repo
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: engine/package.json
+      - name: Read agents.yml
+        run: mkdir -p "$RUNNER_TEMP/in" && bun engine/scripts/settings.ts repo "$RUNNER_TEMP/in/settings.json"
+      - name: Check the repo is set up
+        env:
+          OWNER_PAT: ${{ secrets.OWNER_PAT }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bun engine/scripts/check.ts repo "$RUNNER_TEMP/in/settings.json" "$RUNNER_TEMP/in/check.json"
+      - name: Decide whether to triage, and write the issue file
+        id: prepare
+        run: bun engine/scripts/prepare.ts triage "$RUNNER_TEMP/in/settings.json" "$RUNNER_TEMP/in/check.json" "$RUNNER_TEMP/in"
+      - if: steps.prepare.outputs.go == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+          retention-days: 7
+
+  agent:
+    needs: prepare
+    if: needs.prepare.outputs.go == 'true'
+    # Per issue, on the job, so skip runs never enter the group (docs/design.md, "Concurrency").
+    concurrency:
+      group: triage-agent-${{ inputs.issue }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.prepare.outputs.job_minutes) }}
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: ${{ inputs.egress-policy }}
+          allowed-endpoints: ${{ needs.prepare.outputs.endpoints }}
+          disable-telemetry: ${{ inputs.egress-policy == 'block' }}
+          disable-sudo-and-containers: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+      # The prompt only; the engine's checkout is removed before the agent starts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .github-agents
+          persist-credentials: false
+      - name: Copy the prompt out of the workspace
+        run: |
+          cp .github-agents/prompts/triage.md "$RUNNER_TEMP/prompt.md"
+          rm -rf .github-agents
+          mkdir -p "$RUNNER_TEMP/out"
+      # So the agent can run the tests when reproducing a bug.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Install dependencies
+        if: hashFiles('package.json') != ''
+        env:
+          INSTALL: ${{ needs.prepare.outputs.install }}
+        run: bash -c "$INSTALL"
+      # The cap on the step itself, so a timed-out agent still leaves its work for `apply`.
+      - id: claude
+        timeout-minutes: ${{ fromJSON(needs.prepare.outputs.minutes) }}
+        # No telemetry or error reporting: nothing the run needs, and one less way out.
+        env:
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Triage issue ${{ inputs.issue }} in ${{ github.repository }}.
+            Read ${{ runner.temp }}/prompt.md and follow it.
+            Your input folder is ${{ runner.temp }}/in and your output folder is ${{ runner.temp }}/out.
+          claude_args: --max-turns ${{ needs.prepare.outputs.turns }} --allowedTools Bash,Read,Write,Glob,Grep
+      # Symlinks (say, to /proc/<pid>/environ) and anything else that isn't a regular file
+      # never reach the artifact. `apply` checks again, since the agent ran in this job.
+      - name: Drop anything in the output that isn't a regular file
+        if: always()
+        run: find "$RUNNER_TEMP/out" -mindepth 1 ! -type f ! -type d -print -delete
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-out
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  apply:
+    needs: [prepare, agent]
+    if: always() && needs.prepare.outputs.go == 'true'
+    concurrency:
+      group: triage-apply-${{ inputs.issue }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.OWNER_PAT }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: engine/package.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: agent-out
+          path: ${{ runner.temp }}/out
+      # The only step with the OAuth token in its env (docs/design.md, privilege split).
+      - name: Scan the agent's output for the OAuth token
+        id: scan
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bun engine/scripts/scan-output.ts triage "$RUNNER_TEMP/out"
+      - name: Check the agent's files, then write the triage
+        env:
+          AGENT_RESULT: ${{ needs.agent.result }}
+        run: bun engine/scripts/apply-triage.ts "$RUNNER_TEMP/in" "$RUNNER_TEMP/out"
+      # On a scan hit: a fixed comment with none of the agent's output, and HITL.
+      - name: Safety stop
+        if: failure() && steps.scan.outcome == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun engine/scripts/safety-stop.ts triage "$RUNNER_TEMP/in"

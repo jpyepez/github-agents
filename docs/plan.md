@@ -17,38 +17,43 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 3. **Engine v1**: triage and implement as `workflow_call`, built to [design.md](design.md) and ported from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
    - The decisions for this step (jobs, files between jobs, egress, runtime, the caller, testing) are in [design.md](design.md#jobs).
    - **This repo**
-     - [ ] `ci.yml`, as in [Testing the engine](design.md#testing-the-engine)
+     - [x] `ci.yml`, as in [Testing the engine](design.md#testing-the-engine)
    - **Workflows**
-     - [ ] `.github/workflows/triage.yml`: `on: workflow_call`, inputs `issue` and `label`, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, one run per issue as in [Concurrency](design.md#jobs)
-     - [ ] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run per issue, as in [Concurrency](design.md#jobs).
-     - [ ] Self-checkout at `job.workflow_sha` in every job that runs engine code
-     - [ ] `templates/callers/triage.yml` and `templates/callers/implement.yml`, byte-identical in every repo
+     - [x] `.github/workflows/triage.yml`: `on: workflow_call`, input `issue` (triage runs on opening or by hand, so it needs no label), plus `egress-policy` for the audit pass, secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` (`required: true`), the [three jobs](design.md#jobs), caps from `agents.yml`, one run per issue as in [Concurrency](design.md#jobs)
+     - [x] `.github/workflows/implement.yml`: the same shape, with the claim in `prepare`, `branch_prefix` and `base` from `agents.yml`, and dev-website-2026's hand-off logic (`pr=new`, draft PR, `ready` → `ready-for-human`, HITL) in `apply`. One run per issue, as in [Concurrency](design.md#jobs).
+     - [x] Self-checkout at `job.workflow_sha` in every job that runs engine code
+     - [x] `templates/callers/triage.yml` and `templates/callers/implement.yml`, byte-identical in every repo
    - **Check step** (`scripts/check.ts`, run first in `prepare`; `doctor` reuses it in step 7)
-     - [ ] Every row of the design's table: a missing or empty secret, the board, the labels, the ready bar and hand-back list, `docs/git-workflow.md`, a tracker other than GitHub
+     - [x] Every row of the design's table: a missing or empty secret, the board, the labels, the ready bar and hand-back list, `docs/git-workflow.md`, a tracker other than GitHub
    - **Settings**
-     - [ ] `scripts/settings.ts`: read `.github/agents.yml`, apply every default from the design's table, and fail on an unknown key or a bad value. A missing key always means the more cautious setting.
-     - [ ] `automation: triage` means `apply` never lets an outcome start an implement run, and implement skips at once
+     - [x] `scripts/settings.ts`: read `.github/agents.yml`, apply every default from the design's table, and fail on an unknown key or a bad value. A missing key always means the more cautious setting.
+     - [x] `automation: triage` means `apply` never lets an outcome start an implement run, and implement skips at once
    - **Scripts**, generic: the repo from `GITHUB_REPOSITORY`, the project by number, the Status field and columns by name
-     - [ ] `scripts/tracker.ts`, the tracker seam: every label, comment, body, assignee, PR and board call
-     - [ ] `scripts/board-status.ts`, ported, on top of `tracker.ts`
-     - [ ] `scripts/triage-outcome.ts`, ported. It now validates `decision.json`, `comment.md` and `spec.md` before `apply` writes anything, instead of checking a comment the agent posted. The categories and labels come from `agents.yml`.
-     - [ ] An implement-outcome check: `pr.md` or `handback.md` is present and well formed, the bundle's branch is `branch_prefix` + the issue number, and no commit touches `.github/`. It also enforces the [`Closes` rule](design.md#board): `pr.md` has `Closes #<n>` for its own issue only (`handback.md` none), and no commit message has a closing keyword (`close`, `fix` or `resolve`, any tense) before `#<n>`.
-     - [ ] Unit tests for each, ported from dev-website-2026's where they exist
+     - [x] `scripts/tracker.ts`, the tracker seam: every label, comment, body, assignee, PR and board call
+     - [x] `scripts/board-status.ts`, ported, on top of `tracker.ts`
+     - [x] `scripts/triage-outcome.ts`, ported. It now validates `decision.json`, `comment.md` and `spec.md` before `apply` writes anything, instead of checking a comment the agent posted. The categories and labels come from `agents.yml`.
+     - [x] An implement-outcome check: `pr.md` or `handback.md` is present and well formed, the bundle's branch is `branch_prefix` + the issue number, and no commit touches `.github/`. It also enforces the [`Closes` rule](design.md#board): `pr.md` has `Closes #<n>` for its own issue only (`handback.md` none), and no commit message has a closing keyword (`close`, `fix` or `resolve`, any tense) before `#<n>`.
+     - [x] Unit tests for each, ported from dev-website-2026's where they exist
    - **Prompts**
-     - [ ] `prompts/triage.md` and `prompts/implement.md`, ported. The agent reads the issue file, writes its output files and never calls `gh` to write. They link the repo's ready bar and hand-back list, with the design's fallbacks when one is missing.
-     - [ ] `implement.md` says a closing keyword in a commit message also closes that issue on merge, so other issues are written as "issue N" in commits as well as in `pr.md`
-     - [ ] Nothing repo-specific left in them (the porting notes' list)
+     - [x] `prompts/triage.md` and `prompts/implement.md`, ported. The agent reads the issue file, writes its output files and never calls `gh` to write. They link the repo's ready bar and hand-back list, with the design's fallbacks when one is missing.
+     - [x] `implement.md` says a closing keyword in a commit message also closes that issue on merge, so other issues are written as "issue N" in commits as well as in `pr.md`
+     - [x] Nothing repo-specific left in them (the porting notes' list)
    - **Owner-only comments**
-     - [ ] `prepare` writes the issue, its body and only the owner's comments to a file, and the agent works from that file
+     - [x] `prepare` writes the issue, its body and only the owner's comments to a file, and the agent works from that file
    - **Egress allowlist**
-     - [ ] harden-runner on the `agent` job, as in [design.md](design.md#egress), with the default allowlist in the engine and additions from `agents.yml`
-     - [ ] One audit-mode pass in the sandbox, to find the hosts the browser walk needs
-     - [ ] In that pass, test plain `bunx playwright install chromium` (no `--with-deps`) on `ubuntu-latest`, since the image already ships Chrome and likely its libraries. If it fails, the libraries need sudo, which the `agent` job doesn't have. bullfrog doesn't help with that, since it also needs sudo off to be safe, so it would need a new decision.
-     - [ ] The sandbox run checks that a host off the list is blocked
+     - [x] harden-runner on the `agent` job, as in [design.md](design.md#egress), with the default allowlist in the engine and additions from `agents.yml`
+     - [x] One audit-mode pass in the sandbox, to find the hosts the browser walk needs
+     - [x] In that pass, test plain `bunx playwright install chromium` (no `--with-deps`) on `ubuntu-latest`, since the image already ships Chrome and likely its libraries. If it fails, the libraries need sudo, which the `agent` job doesn't have. bullfrog doesn't help with that, since it also needs sudo off to be safe, so it would need a new decision.
+     - [x] The sandbox run checks that a host off the list is blocked
    - **Release**
-     - [ ] The public sandbox run ([Testing the engine](design.md#testing-the-engine)) passes for triage and implement
-     - [ ] In the sandbox, label two issues `ready` while a third issue's build is running, and add a label that doesn't match. Check that all three build. Then label one issue `ready` a second time, and check that it replaces only that issue's own pending run. It's untested whether a job skipped by its `if` enters a concurrency group, and this settles it.
+     - [x] The public sandbox run ([Testing the engine](design.md#testing-the-engine)) passes for triage and implement
+     - [x] In the sandbox, label two issues `ready` while a third issue's build is running, and add a label that doesn't match. Check that all three build. Then label one issue `ready` a second time, and check that it replaces only that issue's own pending run. It's untested whether a job skipped by its `if` enters a concurrency group, and this settles it.
+     - [x] In the sandbox, probe with step 2's hash method whether the agent's shell can reach `ACTIONS_RUNTIME_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. Issue events run on `main`, so if it can, a hijacked agent could poison caches that CI on `main` restores. If it's reachable, that becomes a decision before the tag.
+     - [ ] Merge the step 3 PR, after the owner's go-ahead
      - [ ] Tag `v1.0.0` and `v1`, after the owner's go-ahead
+     - [ ] Smoke run, after the owner's go-ahead: point the sandbox's callers at `@v1`, then triage a new issue and build a `ready` one
+     - [ ] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
+     - [ ] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
 6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off.

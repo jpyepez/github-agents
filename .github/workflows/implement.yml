@@ -1,0 +1,255 @@
+name: Implement
+
+# Builds one issue labelled `ready` and opens a PR that closes it. Nothing merges here.
+# A consumer repo calls it from templates/callers/implement.yml, on every label event by
+# the owner or by hand; `prepare` skips every label but the repo's ready label.
+#
+# Three jobs (docs/design.md, "Jobs"): `prepare` claims the issue; `agent` builds and
+# commits locally, with a read-only GITHUB_TOKEN, no OWNER_PAT and limited egress; `apply`
+# checks the commits and files, then pushes, opens the PR or hands the issue back.
+on:
+  workflow_call:
+    inputs:
+      issue:
+        type: number
+        required: true
+      label:
+        description: The label that started the run, empty for a manual run.
+        type: string
+        default: ""
+      egress-policy:
+        description: harden-runner's policy for the agent job. `audit` is only for finding the allowlist.
+        type: string
+        default: block
+    secrets:
+      OWNER_PAT:
+        required: true
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      go: ${{ steps.prepare.outputs.go }}
+      turns: ${{ steps.prepare.outputs.turns }}
+      minutes: ${{ steps.prepare.outputs.minutes }}
+      job_minutes: ${{ steps.prepare.outputs.job_minutes }}
+      endpoints: ${{ steps.prepare.outputs.endpoints }}
+      install: ${{ steps.prepare.outputs.install }}
+      branch: ${{ steps.prepare.outputs.branch }}
+      base: ${{ steps.prepare.outputs.base }}
+      browser: ${{ steps.prepare.outputs.browser }}
+      author_name: ${{ steps.prepare.outputs.author_name }}
+      author_email: ${{ steps.prepare.outputs.author_email }}
+    env:
+      GH_TOKEN: ${{ secrets.OWNER_PAT }}
+      ISSUE: ${{ inputs.issue }}
+      LABEL: ${{ inputs.label }}
+      OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: repo
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: engine/package.json
+      - name: Read agents.yml
+        run: mkdir -p "$RUNNER_TEMP/in" && bun engine/scripts/settings.ts repo "$RUNNER_TEMP/in/settings.json"
+      - name: Check the repo is set up
+        env:
+          OWNER_PAT: ${{ secrets.OWNER_PAT }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bun engine/scripts/check.ts repo "$RUNNER_TEMP/in/settings.json" "$RUNNER_TEMP/in/check.json"
+      - name: Decide whether to build, claim the issue, and write the issue file
+        id: prepare
+        run: bun engine/scripts/prepare.ts implement "$RUNNER_TEMP/in/settings.json" "$RUNNER_TEMP/in/check.json" "$RUNNER_TEMP/in"
+      - if: steps.prepare.outputs.go == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+          retention-days: 7
+
+  agent:
+    needs: prepare
+    if: needs.prepare.outputs.go == 'true'
+    # Per issue, on the job, so skip runs never enter the group and ready issues build in
+    # parallel (docs/design.md, "Concurrency").
+    concurrency:
+      group: implement-agent-${{ inputs.issue }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.prepare.outputs.job_minutes) }}
+    permissions:
+      contents: read
+      issues: read
+    env:
+      BRANCH: ${{ needs.prepare.outputs.branch }}
+      BASE: ${{ needs.prepare.outputs.base }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: ${{ inputs.egress-policy }}
+          allowed-endpoints: ${{ needs.prepare.outputs.endpoints }}
+          disable-telemetry: ${{ inputs.egress-policy == 'block' }}
+          disable-sudo-and-containers: true
+      # Every branch, so a retry can carry on from origin/<branch>. No credentials are left behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+      # The prompt only; the engine's checkout is removed before the agent starts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .github-agents
+          persist-credentials: false
+      - name: Copy the prompt out of the workspace
+        run: |
+          cp .github-agents/prompts/implement.md "$RUNNER_TEMP/prompt.md"
+          rm -rf .github-agents
+          mkdir -p "$RUNNER_TEMP/out/screenshots"
+      # The agent commits on the branch; it always starts from origin/<base> or an earlier run's branch.
+      - name: Check out the branch
+        env:
+          AUTHOR_NAME: ${{ needs.prepare.outputs.author_name }}
+          AUTHOR_EMAIL: ${{ needs.prepare.outputs.author_email }}
+        run: |
+          git config user.name "$AUTHOR_NAME"
+          git config user.email "$AUTHOR_EMAIL"
+          if git rev-parse --verify --quiet "refs/remotes/origin/$BRANCH" >/dev/null; then
+            git switch "$BRANCH"
+          else
+            git switch -c "$BRANCH" "origin/$BASE"
+          fi
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Install dependencies
+        if: hashFiles('package.json') != ''
+        env:
+          INSTALL: ${{ needs.prepare.outputs.install }}
+        run: bash -c "$INSTALL"
+      # Without --with-deps: that needs sudo, which harden-runner removed (docs/plan.md, egress audit pass).
+      - name: Install Chromium for the browser walk
+        if: needs.prepare.outputs.browser == 'true'
+        run: bunx playwright install chromium
+      # The cap on the step itself, so a timed-out agent still leaves its work for `apply`.
+      - id: claude
+        timeout-minutes: ${{ fromJSON(needs.prepare.outputs.minutes) }}
+        # No telemetry or error reporting: nothing the run needs, and one less way out.
+        env:
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068 # v1.0.267
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Implement issue ${{ inputs.issue }} in ${{ github.repository }} on branch ${{ env.BRANCH }}, which is checked out.
+            Read ${{ runner.temp }}/prompt.md and follow it.
+            Your input folder is ${{ runner.temp }}/in and your output folder is ${{ runner.temp }}/out.
+          claude_args: --max-turns ${{ needs.prepare.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,TodoWrite
+      # Commits pass to `apply` as a bundle; nothing is pushed from here.
+      - name: Bundle the commits
+        if: always()
+        run: |
+          if git rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null &&
+            [ "$(git rev-list --count "origin/$BASE..refs/heads/$BRANCH")" -gt 0 ]; then
+            git bundle create "$RUNNER_TEMP/out/commits.bundle" "origin/$BASE..refs/heads/$BRANCH"
+          else
+            echo "No commits on $BRANCH."
+          fi
+      # Symlinks (say, to /proc/<pid>/environ) and anything else that isn't a regular file
+      # never reach the artifact. `apply` checks again, since the agent ran in this job.
+      - name: Drop anything in the output that isn't a regular file
+        if: always()
+        run: find "$RUNNER_TEMP/out" -mindepth 1 ! -type f ! -type d -print -delete
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-out
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  apply:
+    needs: [prepare, agent]
+    if: always() && needs.prepare.outputs.go == 'true'
+    concurrency:
+      group: implement-apply-${{ inputs.issue }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.OWNER_PAT }}
+    steps:
+      # With OWNER_PAT, so the push starts CI. It has no `workflow` scope, so it can't push workflow files.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.OWNER_PAT }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .github-agents
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .github-agents/package.json
+      # gh pr comment --attach, for the screenshots, needs gh 2.103 or later.
+      - name: Make sure gh is 2.103 or later
+        run: |
+          have=$(gh --version | awk 'NR == 1 { print $3 }')
+          if [ "$(printf '%s\n' 2.103.0 "$have" | sort -V | head -n 1)" != 2.103.0 ]; then
+            gh release download --repo cli/cli --pattern 'gh_*_linux_amd64.deb' --dir "$RUNNER_TEMP/gh"
+            sudo dpkg -i "$RUNNER_TEMP"/gh/gh_*_linux_amd64.deb
+          fi
+          gh --version
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prepare
+          path: ${{ runner.temp }}/in
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: agent-out
+          path: ${{ runner.temp }}/out
+      # The only step with the OAuth token in its env (docs/design.md, privilege split).
+      - name: Scan the agent's output and commits for the OAuth token
+        id: scan
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          bun .github-agents/scripts/scan-output.ts implement "$RUNNER_TEMP/out" "$RUNNER_TEMP/in/settings.json" "$ISSUE"
+      - name: Check the agent's work, then push, open the PR or hand it back
+        env:
+          AGENT_RESULT: ${{ needs.agent.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          bun .github-agents/scripts/apply-implement.ts "$RUNNER_TEMP/in" "$RUNNER_TEMP/out"
+      # On a scan hit: a fixed comment with none of the agent's output, and HITL.
+      - name: Safety stop
+        if: failure() && steps.scan.outcome == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bun .github-agents/scripts/safety-stop.ts implement "$RUNNER_TEMP/in"

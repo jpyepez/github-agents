@@ -58,14 +58,14 @@ jobs:
        github.event.sender.login == github.repository_owner)
     uses: jpyepez/github-agents/.github/workflows/implement.yml@v1
     with:
-      issue: ${{ github.event.issue.number || inputs.issue }}
+      issue: ${{ fromJSON(github.event.issue.number || inputs.issue) }}
       label: ${{ github.event.label.name }}
     secrets:
       OWNER_PAT: ${{ secrets.OWNER_PAT }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-The engine declares both secrets `required: true`, which catches a secret the caller doesn't pass. It doesn't catch one that is set but empty, which step 2 showed arrives as an empty string, so [the check step](#the-check-step) also fails on an empty secret. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
+`fromJSON` around the issue number is needed: on a manual run, `github.event.issue.number || inputs.issue` reaches the engine's `number` input as the wrong type, and the run fails at startup with only "a workflow file issue" (found in step 3's sandbox run). The engine declares both secrets `required: true`, which catches a secret the caller doesn't pass. It doesn't catch one that is set but empty, which step 2 showed arrives as an empty string, so [the check step](#the-check-step) also fails on an empty secret. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
 
 ## Settings: `.github/agents.yml`
 
@@ -85,6 +85,7 @@ Every key is optional. **A missing setting makes the engine more cautious, never
 | `caps` | triage 30 turns / 30 min; implement 80 turns / 120 min | |
 | `base` | `main` | |
 | `branch_prefix` | `auto/issue-` | |
+| `egress` | none | hosts added to the agent job's [egress](#egress) allowlist, like `example.com` or `*.cdn.example.com:443` |
 
 Example, lyrics-display:
 
@@ -96,7 +97,7 @@ checks: [lint, typecheck, test, test:e2e]
 
 ## Rules the agent reads, with fallbacks
 
-- **Commit and PR title style**: follow `docs/git-workflow.md`; without it, a plain imperative sentence. The draft-PR title the shell step writes follows the same setting (`WIP: issue <n>` when plain). A doc rather than a switch, because conventional commits also need each repo's scopes.
+- **Commit and PR title style**: follow `docs/git-workflow.md`; without it, a plain imperative sentence. `pr.md` and `handback.md` titles follow the same setting. Only the shell's fallback, for a run that stopped before writing either file, uses `WIP: issue <n>`, and its draft PR's body asks the owner to retitle it in the repo's style before merging, since a squash merge uses the PR title. A doc rather than a switch, because conventional commits also need each repo's scopes.
 - **Ready bar**: without one, triage never applies `ready`, so nothing builds unattended. Every criterion must be checkable by a test, a screenshot, **or, for config- and docs-only changes, by reading the diff**. The baseline run on lyrics-display issue 30 showed the old bar made config-only tickets impossible to mark `ready`.
 - **Hand-back list**: without one, a strict built-in default: `.github/`, secrets, deploy config, new dependencies, storage schema and migrations.
 
@@ -105,7 +106,7 @@ checks: [lint, typecheck, test, test:e2e]
 Consumer repos are public, so anyone can comment on the owner's issues. A rule in the prompt telling the agent to ignore those comments is likely to hold, never certain. The protection comes from what the agent can do:
 
 - **The agent holds no write token.** It writes files and the shell steps validate and apply them.
-  - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status.
+  - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status. On a re-triage whose outcome isn't `ready`, the shell restores the body from the `Original note:` comment, since the spec no longer applies. `decision.json` names the outcome by role (`ready`, `needs-info`, `ready-for-human`, `wontfix`), and the shell maps it to the repo's label.
   - Implement commits locally and writes `pr.md` (title and description), or `handback.md`, plus screenshots. The shell pushes the branch, opens or updates the PR, posts the screenshots, and hands off to HITL when needed.
 - **The agent's job keeps `GITHUB_TOKEN` read-only**, for example `contents: read` and `issues: read`. The agent sees the action's `github_token` in its environment, and `permissions` apply to a whole job, not to one step, so every job that runs the agent stays read-only. All writes go through `OWNER_PAT` in shell steps: push, PR, labels, comments and board. That also suits GitHub's rule that pushes and labels made with `GITHUB_TOKEN` don't start other workflows. See [research](research.md#tested-in-step-2).
 - **The agent's job limits egress** to the hosts it needs, because the OAuth token can be read from the agent's shell (see [research](research.md#tested-in-step-2)). See [Egress](#egress) below.
@@ -118,6 +119,14 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
   - Step 2's agent-environment test found `OWNER_PAT` unreachable from the agent's shell, so the classic token stands. Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards.
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
+
+**The output scan.** `apply` publishes the agent's output on a public repo at once: comments, the spec, the PR body, commits, screenshots. Before it writes anything, a step of its own, the only one with `CLAUDE_CODE_OAUTH_TOKEN` in its env, scans all of it for the token: every output file, every screenshot, and every commit's message and diff. It looks for the plain token, base64 (standard and url-safe, at all three offsets) and percent-encoding. A hit publishes none of the agent's output and fails the run, naming the file but never the value, with a "treat as leaked: revoke" error in the log. The engine then posts its own fixed comment ("This run failed a safety check and wrote nothing", with the run's link) and moves the issue to HITL, swapping `ready` for `ready-for-human` on implement, so the issue doesn't sit in In progress looking like a running build. The agent job also deletes anything in its output that isn't a regular file before upload, and `apply` posts a screenshot only if it's a regular file with an image's first bytes, so a symlink to `/proc/<pid>/environ` can't be uploaded.
+
+**What's left.** A determined agent could still disguise the token (split it, or transform it some other way) and get it past the scan. Claude Code needs the token in its own process, so it can't be fully hidden from the agent's shell. What remains is owner-only input, GitHub's secret scanning on public repos, and revoking the token if it leaks.
+
+### Pinned actions
+
+Every third-party action in the engine's workflows, and in this repo's own CI, is pinned to a full commit SHA, with its version in a comment: `actions/checkout@3d3c42e… # v7.0.1`. **Why:** they run with `OWNER_PAT` in every consumer repo, and a tag can be moved to other code, so a moved tag would be a supply-chain hole. A version bump is a reviewed PR that changes the SHA and the comment together.
 
 ### Jobs
 
@@ -133,13 +142,21 @@ Decided with the owner on 2026-11-03 for step 3. Each workflow runs three jobs, 
 
 **Concurrency:** `concurrency` sits on the `agent` and `apply` jobs, never on the workflow. Both jobs run only when `prepare` outputs that the run should go ahead, so skip runs never enter a group. Triage and implement both use one group per issue, so builds for different issues run in parallel, and only a second run for the same issue replaces a pending one, which is wanted. A single implement group per repo would drop builds: with three issues marked `ready` at once, the first builds, the second waits, and the third cancels the second. The cost: parallel builds use more Claude quota at once, and two PRs may conflict at merge, which review handles as with any two PRs. Each job has its own group (for example `implement-agent-<issue>` and `implement-apply-<issue>`), so another run's `agent` can't take the group between this run's two jobs and leave its `apply` pending. **Why:** the caller starts a run on every label event by the owner, and `apply` sets labels with `OWNER_PAT`, acting as the owner, so each triage starts several skip runs. GitHub keeps only one pending run per group, and a newer pending run cancels the older one. A `ready` run waiting behind a busy implement run could be cancelled by a skip run from a label added seconds later, and the build would be lost without a trace. Whether a job skipped by its `if` enters its concurrency group is untested; the v1 sandbox run settles it.
 
+**Runs for the same issue.** Concurrency alone isn't enough: a queued build for an issue starts as soon as the earlier build's agent finishes, before that run's `apply` has pushed, so it would branch from stale code. So:
+
+- **`prepare` skips while another run is working on the issue.** It looks for another unfinished run with the same title (the callers' `run-name` holds the issue number) whose `agent` or `apply` job is queued or running. Implement then posts a fixed comment: "A build for this issue is already running; label `ready` again after it finishes." Triage skips with a notice only. **The trade-off:** a second `ready` during a build is ignored with a comment, not queued.
+- **`apply` writes nothing when its agent job never started**, which it reads from the Actions API: no step of the agent job has a start time, as when a newer run replaced it in the queue. A job that started and then timed out or failed still hands off. Guessing from "cancelled and no artifact" would be wrong, since a timeout also leaves no artifact.
+- **A rejected push hands off.** If the branch moved anyway (two `prepare`s racing past the check), the push is rejected as non-fast-forward, and `apply` comments "the branch moved; label `ready` again to rebuild" and hands off, instead of failing without one.
+
+The per-issue concurrency groups stay, as a backstop for two `prepare`s racing.
+
 ### Egress
 
 Decided with the owner on 2026-11-03 for step 3. The `agent` job's first step is `step-security/harden-runner` (v2.22.3 or later), with:
 
-- `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs.
+- `egress-policy: block` and an allowlist. The engine keeps a default list, starting from Claude Code's network requirements, and `agents.yml` can add to it. One audit-mode pass first finds the hosts the browser walk needs. The workflows take an `egress-policy` input for that pass. It defaults to `block`, and the byte-identical callers never set it; only the sandbox's caller passes `audit`.
 - `disable-telemetry: true`, so run data doesn't go to StepSecurity. It only works with `block`.
-- `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`.
+- `disable-sudo-and-containers: true`, because root could undo the firewall. So the `agent` job can't `sudo apt-get`. The browser walk installs Chromium with plain `playwright install chromium`, which needs Playwright 1.64 or later on `ubuntu-latest`, now Ubuntu 26.04 (step 3's sandbox run); 1.56 refuses it.
 
 **Why harden-runner:** it enforces host-wide, so Claude's shell is covered, and it's free for public repos, which every consumer repo will be by step 5. It doesn't enforce on a private repo without a subscription, and it has fail-open cases in its source. The v1 test checks that a host off the list is blocked. The fallback is `bullfrogsec/bullfrog`. Details and sources are in [research](research.md#verified-in-the-docs).
 
@@ -151,8 +168,9 @@ It runs first in every workflow, before Claude starts:
 | --- | --- |
 | A secret missing or empty | fail, naming it |
 | Board | continue, skip Status updates |
+| Board set in `agents.yml` but unreadable, or missing a column | fail, listing its columns: a typo should be loud |
 | Labels | fail, listing them; the setup skill creates them |
-| Ready bar or hand-back list | triage runs but never applies `ready` |
+| Ready bar or hand-back list | triage runs but never applies `ready`: the outcome check rejects a `ready` decision rather than downgrading it, since the agent's comment argues for `ready` |
 | `docs/git-workflow.md` | plain sentences |
 | Tracker isn't GitHub (`docs/agents/issue-tracker.md`) | fail with a clear message |
 
@@ -183,7 +201,7 @@ Decided with the owner on 2026-11-03 for step 3. The engine's scripts run on Bun
 
 Decided with the owner on 2026-11-03 for step 3.
 
-- **Before a release:** a **public** throwaway repo, `github-agents-sandbox`, with a tiny Bun project, its two secrets and a board. Triage and build test issues there against the branch, check that a host off the allowlist is blocked, then delete it. It's public because harden-runner doesn't enforce on a private repo. Secrets stay secret in a public repo, and the sandbox holds no private content.
+- **Before a release:** a **public** throwaway repo, `github-agents-sandbox`, with a tiny Bun project, its two secrets and a board. Triage and build test issues there against the branch, check that a host off the allowlist is blocked, then delete it. It's public because harden-runner doesn't enforce on a private repo. Secrets stay secret in a public repo, and the sandbox holds no private content. The sandbox always uses throwaway, short-lived tokens: a classic `OWNER_PAT` that expires in 7 days and a fresh Claude OAuth token, both revoked at teardown. Never the real ones, because the test exercises leak paths on a public repo.
 - **On every PR here:** one small `ci.yml` runs `actionlint`, `shellcheck`, `bun test` and a typecheck of `scripts/`. This repo still has no issue automation.
 
 ## Versioning
