@@ -88,7 +88,7 @@ jobs:
           github_token: ${{ github.token }}
           prompt: |
             Run exactly this command with the Bash tool, then reply "done":
-            bash .engine/scripts/sandbox/agent-env-probe.sh "$RUNNER_TEMP/secret-hashes" "$RUNNER_TEMP/probe-report.txt"
+            bash .engine/scripts/sandbox/agent-env-probe.sh ${{ runner.temp }}/secret-hashes ${{ runner.temp }}/probe-report.txt
           claude_args: --max-turns 4 --allowedTools Bash
 
       - name: Probe report

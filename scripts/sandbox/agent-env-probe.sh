@@ -10,15 +10,14 @@ say() { echo "$*" >> "$report"; }
 
 sha() { printf %s "$1" | sha256sum | cut -c1-64; }
 match() { grep -m1 "^$(sha "$1") " "$hashes" | cut -d' ' -f2; }
-found=0
 check() { # <where> <value>
   local name; name=$(match "$2")
-  if [ -n "$name" ]; then say "FOUND $name in $1"; found=$((found + 1)); fi
+  if [ -n "$name" ]; then say "FOUND $name in $1"; fi
 }
 tokens() { grep -aoE '(ghp_|ghs_|gho_|ghu_|github_pat_|sk-ant-)[A-Za-z0-9_-]{10,}' "$@" 2>/dev/null | sort -u; }
 
 say "== env names in the agent's shell that look like credentials"
-env | cut -d= -f1 | grep -E 'TOKEN|SECRET|KEY|_PAT$|^PAT|AUTH|PASSW' | sort | sed 's/^/  /' >> "$report"
+env | cut -d= -f1 | grep -E 'TOKEN|SECRET|KEY|^PAT$|_PAT$|AUTH|PASSW' | sort | sed 's/^/  /' >> "$report"
 
 say "== matches"
 # 1. The agent's own environment, whole values.
@@ -27,12 +26,12 @@ while IFS= read -r -d '' line; do check "own env (${line%%=*})" "${line#*=}"; do
 # 2. Other processes' environments this user can read (the action's own Node process, the runner).
 for f in /proc/[0-9]*/environ; do
   [ -r "$f" ] || continue
-  pid=${f#/proc/}; pid=${pid%/environ}; cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-60)
+  pid=${f#/proc/}; pid=${pid%/environ}; cmd=$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | head -n1); cmd=${cmd##*/}  # program name only: arguments can hold secrets
   while IFS= read -r -d '' line; do check "pid $pid [$cmd] env (${line%%=*})" "${line#*=}"; done < "$f"
 done
 
 # 3. Git credentials: checkout's extraheader is base64 of x-access-token:<token>.
-for cfg in .git/config "$HOME/.gitconfig"; do
+for cfg in "${GITHUB_WORKSPACE:-.}/.git/config" "$HOME/.gitconfig"; do
   [ -r "$cfg" ] || continue
   grep -i 'extraheader' "$cfg" | grep -oE '[A-Za-z0-9+/=]{20,}' | while read -r b; do
     t=$(printf %s "$b" | base64 -d 2>/dev/null | cut -d: -f2-)
@@ -47,7 +46,7 @@ for dir in "$HOME" "${RUNNER_TEMP:-/nonexistent}" "${GITHUB_WORKSPACE:-.}/.git" 
   while read -r t; do check "a file under $dir" "$t"; done < <(find "$dir" -type f -size -2M -readable -print0 2>/dev/null | xargs -0 -r grep -laE '(ghp_|ghs_|gho_|ghu_|github_pat_|sk-ant-)' 2>/dev/null | xargs -r -d '\n' cat 2>/dev/null | tokens -)
 done
 
-say "== summary: $found match(es)"
+say "== summary: $(grep -c '^FOUND' "$report") match(es)"
 cut -d' ' -f2 "$hashes" | while read -r name; do
   if grep -q "^FOUND $name " "$report"; then say "  $name: reachable"; else say "  $name: not found"; fi
 done
