@@ -40,3 +40,21 @@ Run on 2026-11-03 from the private repo `github-agents-sandbox` (since deleted),
   - The agent's env also has empty `ANTHROPIC_API_KEY`, `AWS_*` and `SSH_SIGNING_KEY` names, from the action.
   - The probe didn't decode the credentials `actions/checkout` persists: v7 writes them base64-encoded to a `git-credentials-*.config` file under `$RUNNER_TEMP`, not to `.git/config`. Assume the agent can read those too, and check out with `persist-credentials: false` where the agent runs.
   - **So:** the OAuth token is reachable, and an egress allowlist is needed (step 3 of the plan). Limit the `permissions` of every job that runs the agent, since a step can't narrow its job's token, and never give the agent `OWNER_PAT`.
+
+## Tested in step 3
+
+Run on 2026-11-03 in the public `github-agents-sandbox` (since deleted), calling the engine at `step-3-build`, on `ubuntu-latest`, which is now Ubuntu 26.04.
+
+- [x] **Both workflows work end to end from real events.** An issue the owner opened was triaged: labels, the spec as the body, the original as an `Original note:` comment, and the Status. Its `ready` label started implement, which opened a PR with `Closes #1`. The callers' `permissions` (`contents: read`, `issues: read`) were enough for claude-code-action on `issues` events.
+- [x] **A manual run needs `fromJSON` around the issue number.** With `issue: ${{ github.event.issue.number || inputs.issue }}`, a `workflow_dispatch` run failed at startup with only "a workflow file issue". `fromJSON(...)` around the same expression works for both events. The callers use it.
+- [x] **The egress allowlist.** An audit pass of one triage and one implement run saw: `api.anthropic.com`, `claude.ai`, `downloads.claude.ai`, `github.com`, `api.github.com`, `release-assets.githubusercontent.com` and `registry.npmjs.org`; for Playwright's Chromium, `cdn.playwright.dev`, `playwright.download.prss.microsoft.com` and `storage.googleapis.com`; and Claude Code's telemetry, `http-intake.logs.us5.datadoghq.com`, which `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` turns off. harden-runner allows the Actions hosts (artifacts, results) itself. `platform.claude.com` and `objects.githubusercontent.com` weren't called.
+- [x] **Blocking works.** With `egress-policy: block`, a `curl` to `example.com` from the agent's shell failed at once ("Could not connect"), and `api.github.com` returned 200.
+- [x] **Chromium installs without sudo.** `bunx playwright install chromium`, without `--with-deps`, worked on Ubuntu 26.04 with Playwright 1.64.1, so the runner image has the libraries. Playwright 1.56.1 refuses Ubuntu 26.04 outright.
+- [x] **The agent's shell can't reach the Actions runtime tokens.** `ACTIONS_RUNTIME_TOKEN`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN`, `ACTIONS_CACHE_URL` and `ACTIONS_RESULTS_URL` were in neither the agent's env nor any `/proc/<pid>/environ` it could read. The probe printed names only.
+- [x] **Cache writes depend on the event.** On `issues` events, every cache save (from `setup-bun`'s post step) was denied: "cache write denied: token has no writable scopes". On `workflow_dispatch`, caches were saved for `refs/heads/main`, including harden-runner's from the agent job. Since the agent can't reach the runtime token, it can't use that.
+- [x] **Concurrency, per issue.** Three issues labelled `ready` close together built in parallel, and an unrelated label was only a skip run. Relabelling one issue `ready` twice during its build left one pending run for it and cancelled the other, without touching the other issues.
+- [ ] **Two bugs found there**, both when a run replaces another for the same issue:
+  - The replaced run's `apply` still ran, since it runs `always()`. It treated the never-started agent as a stopped build and handed the issue back while the newer run was building.
+  - The newer run's agent took the issue's agent group as soon as the first run's agent finished, before that run's `apply` had pushed. It branched from `origin/main`, and its push was rejected as non-fast-forward.
+- [x] **The agent refuses instructions inside an issue.** Asked in an issue's body to run probe commands and paste their output, the triage agent declined and said it follows `docs/agents/`, not the issue's text.
+
