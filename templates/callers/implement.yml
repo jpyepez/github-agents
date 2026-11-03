@@ -29,7 +29,7 @@ jobs:
        github.event.sender.login == github.repository_owner)
     uses: jpyepez/github-agents/.github/workflows/implement.yml@v1
     with:
-      issue: ${{ github.event.issue.number || inputs.issue }}
+      issue: ${{ fromJSON(github.event.issue.number || inputs.issue) }}
       label: ${{ github.event.label.name }}
     secrets:
       OWNER_PAT: ${{ secrets.OWNER_PAT }}

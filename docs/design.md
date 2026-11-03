@@ -58,14 +58,14 @@ jobs:
        github.event.sender.login == github.repository_owner)
     uses: jpyepez/github-agents/.github/workflows/implement.yml@v1
     with:
-      issue: ${{ github.event.issue.number || inputs.issue }}
+      issue: ${{ fromJSON(github.event.issue.number || inputs.issue) }}
       label: ${{ github.event.label.name }}
     secrets:
       OWNER_PAT: ${{ secrets.OWNER_PAT }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-The engine declares both secrets `required: true`, which catches a secret the caller doesn't pass. It doesn't catch one that is set but empty, which step 2 showed arrives as an empty string, so [the check step](#the-check-step) also fails on an empty secret. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
+`fromJSON` around the issue number is needed: on a manual run, `github.event.issue.number || inputs.issue` reaches the engine's `number` input as the wrong type, and the run fails at startup with only "a workflow file issue" (found in step 3's sandbox run). The engine declares both secrets `required: true`, which catches a secret the caller doesn't pass. It doesn't catch one that is set but empty, which step 2 showed arrives as an empty string, so [the check step](#the-check-step) also fails on an empty secret. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
 
 ## Settings: `.github/agents.yml`
 

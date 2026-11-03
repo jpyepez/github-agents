@@ -23,7 +23,7 @@ jobs:
     if: github.actor == github.repository_owner
     uses: jpyepez/github-agents/.github/workflows/triage.yml@v1
     with:
-      issue: ${{ github.event.issue.number || inputs.issue }}
+      issue: ${{ fromJSON(github.event.issue.number || inputs.issue) }}
     secrets:
       OWNER_PAT: ${{ secrets.OWNER_PAT }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
