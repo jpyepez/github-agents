@@ -107,6 +107,16 @@ export class Tracker {
     this.run(["issue", "edit", String(n), "--repo", this.repo, "--add-assignee", login]);
   }
 
+  openIssuesBy(author: string): { number: number; title: string; labels: string[] }[] {
+    return this.json<{ number: number; title: string; labels: { name: string }[] }[]>([
+      "issue", "list", "--repo", this.repo, "--state", "open", "--author", author, "--limit", "200", "--json", "number,title,labels",
+    ]).map((i) => ({ number: i.number, title: i.title, labels: i.labels.map((l) => l.name) }));
+  }
+
+  userId(login: string): number {
+    return Number(this.run(["api", `users/${login}`, "--jq", ".id"]));
+  }
+
   repoLabels(): string[] {
     return this.json<{ name: string }[]>(["label", "list", "--repo", this.repo, "--limit", "1000", "--json", "name"]).map((l) => l.name);
   }

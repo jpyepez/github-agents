@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseSettings } from "./settings";
-import { labelPlan, statusFor, validateTriage, withDisclaimer } from "./triage-outcome";
+import { labelPlan, NO_READY, RETRY, statusFor, validateTriage, withDisclaimer } from "./triage-outcome";
 
 const settings = parseSettings(null, {});
 const spec = "Summary.\n\n## Acceptance criteria\n\n- [ ] It works\n";
@@ -23,7 +23,7 @@ describe("validateTriage", () => {
   });
 
   const rejects = (f: ReturnType<typeof files>, reason: string, readyAllowed = true, s = settings) =>
-    expect(validateTriage(f, s, readyAllowed)).toEqual({ pass: false, reason: expect.stringContaining(reason) });
+    expect(validateTriage(f, s, readyAllowed)).toEqual({ pass: false, reason: expect.stringContaining(reason), hint: expect.any(String) });
 
   test("rejects a missing or broken decision.json", () => {
     rejects(files(null), "decision.json is missing");
@@ -36,8 +36,14 @@ describe("validateTriage", () => {
     rejects(files({ category: "bug", outcome: "needs-triage" }), "outcome must be one of");
     rejects(files({ category: "bug", outcome: "ready-for-agent" }), "outcome must be one of");
   });
-  test("rejects ready when the repo has no ready bar or hand-back list", () =>
-    rejects(files({ category: "bug", outcome: "ready" }, "x", spec), "may not apply it", false));
+  test("rejects ready when the repo has no ready bar or hand-back list, and says a re-dispatch won't help", () => {
+    const r = validateTriage(files({ category: "bug", outcome: "ready" }, "x", spec), settings, false);
+    expect(r).toMatchObject({ pass: false, reason: expect.stringContaining("may not apply it"), hint: NO_READY });
+    expect(NO_READY).toContain("Re-dispatching won't help");
+  });
+  test("asks for a re-dispatch for any other failure", () => {
+    expect(validateTriage(files(null), settings, true)).toMatchObject({ hint: RETRY });
+  });
   test("rejects a retitle on two lines", () => rejects(files({ category: "bug", outcome: "wontfix", retitle: "a\nb" }), "retitle must be one line"));
   test("rejects an empty comment", () => rejects(files({ category: "bug", outcome: "wontfix" }, "  \n"), "comment.md is missing or empty"));
   test("rejects ready without a spec, or with one that has no checklist", () => {

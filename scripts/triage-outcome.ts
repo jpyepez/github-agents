@@ -31,9 +31,13 @@ export type TriageFiles = { decision: string | null; comment: string | null; spe
 export type TriageDecision = { category: string; outcome: Outcome; retitle: string | null };
 export type Validated =
   | { pass: true; decision: TriageDecision; comment: string; spec: string | null }
-  | { pass: false; reason: string };
+  | { pass: false; reason: string; hint: string };
 
-const fail = (reason: string): Validated => ({ pass: false, reason });
+export const RETRY = "Nothing was written; re-dispatch Triage.";
+export const NO_READY =
+  "Nothing was written. Re-dispatching won't help until the repo has a ready bar and a hand-back list: the prompt says to choose ready-for-human instead, so the agent ignored it. Check the prompt and the run.";
+
+const fail = (reason: string, hint = RETRY): Validated => ({ pass: false, reason, hint });
 
 export function validateTriage(files: TriageFiles, settings: Settings, readyAllowed: boolean): Validated {
   if (files.decision === null) return fail("decision.json is missing");
@@ -56,7 +60,7 @@ export function validateTriage(files: TriageFiles, settings: Settings, readyAllo
   }
   const outcome = d.outcome as Outcome;
   if (outcome === "ready" && !readyAllowed) {
-    return fail("the outcome is ready, but this repo has no ready bar or hand-back list, so triage may not apply it");
+    return fail("the outcome is ready, but this repo has no ready bar or hand-back list, so triage may not apply it", NO_READY);
   }
 
   let retitle: string | null = null;
@@ -126,7 +130,7 @@ if (import.meta.main) {
     };
     const result = validateTriage(files, settings, check.readyAllowed);
     if (!result.pass) {
-      console.log(`::error::#${issueArg} failed the triage outcome check: ${result.reason}. Nothing was written; re-dispatch Triage.`);
+      console.log(`::error::#${issueArg} failed the triage outcome check: ${result.reason}. ${result.hint}`);
       process.exit(1);
     }
     const repo = process.env.GITHUB_REPOSITORY;
