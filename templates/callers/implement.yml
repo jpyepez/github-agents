@@ -1,0 +1,36 @@
+name: Implement
+
+# Calls github-agents' Implement when the owner labels one of their issues, or by hand:
+#   gh workflow run implement.yml -f issue=<n>
+# It names no label: the engine compares the label with .github/agents.yml and skips the
+# rest (docs/design.md, "Callers"). Byte-identical in every repo.
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to implement
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  implement:
+    # Only the owner's actions start a run, so no one else can spend the Claude budget or
+    # run an agent with the owner's PAT.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner) ||
+      (github.event_name == 'issues' &&
+       github.event.issue.user.login == github.repository_owner &&
+       github.event.sender.login == github.repository_owner)
+    uses: jpyepez/github-agents/.github/workflows/implement.yml@v1
+    with:
+      issue: ${{ github.event.issue.number || inputs.issue }}
+      label: ${{ github.event.label.name }}
+    secrets:
+      OWNER_PAT: ${{ secrets.OWNER_PAT }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

@@ -1,0 +1,29 @@
+name: Triage
+
+# Calls github-agents' Triage on each issue the owner opens, or by hand:
+#   gh workflow run triage.yml -f issue=<n>
+# Byte-identical in every repo; settings live in .github/agents.yml.
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to triage
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  triage:
+    # Only the owner's actions start a run, so no one else can spend the Claude budget.
+    if: github.actor == github.repository_owner
+    uses: jpyepez/github-agents/.github/workflows/triage.yml@v1
+    with:
+      issue: ${{ github.event.issue.number || inputs.issue }}
+    secrets:
+      OWNER_PAT: ${{ secrets.OWNER_PAT }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
