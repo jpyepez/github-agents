@@ -52,7 +52,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [x] Merge the step 3 PR, after the owner's go-ahead
      - [x] Tag `v1.0.0` and `v1`, after the owner's go-ahead
      - [x] Smoke run, after the owner's go-ahead: point the sandbox's callers at `@v1`, then triage a new issue and build a `ready` one
-     - [ ] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
+     - [x] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
      - [ ] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
