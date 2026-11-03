@@ -13,7 +13,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - [x] Owner runs `/setup-work`: GitHub tracker, default labels (`ready-for-agent` as `ready`), `docs/agents/`. Issues and [board 4](https://github.com/users/jpyepez/projects/4), triaged by hand; no automation on this repo.
    - [x] Merge PR 1 (agent skills config and board docs), as 821c318
 2. **Plumbing test** in `github-agents-sandbox` (private, deleted afterwards). A small reusable "hello" workflow settles every open item in [research.md](research.md#tested-in-step-2). The sandbox needs the secrets `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN`, and no board.
-3. **Engine v1**: triage and implement as `workflow_call`, the check step, `.github/agents.yml`, the privilege split, owner-only comments, the tracker seam. Port from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
+3. **Engine v1**: triage and implement as `workflow_call`, the check step, `.github/agents.yml`, the privilege split, an egress allowlist for the agent's job (harden-runner or similar; step 2 found the OAuth token readable from the agent's shell), owner-only comments, the tracker seam. Port from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
 6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off.
@@ -50,9 +50,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
   - the same CI shape in both repos
   - one formatter, with the same config
   - `AGENTS.md` with `CLAUDE.md` linking to it
-- **Security**, depending on step 2:
-  - an egress allowlist: step 2 found the agent's shell can read `CLAUDE_CODE_OAUTH_TOKEN` (see [research](research.md#tested-in-step-2))
-  - interaction limits only if strangers start commenting
+- **Security**: interaction limits, only if strangers start commenting.
 - **Things that expire**: `OWNER_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` have expiry dates. Note them and renew before they lapse, or every run fails. `OWNER_PAT` is one classic token for every repo, so it has one expiry date: give it about a year.
 - **Engine**:
   - a `v2` only for breaking changes

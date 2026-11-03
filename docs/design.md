@@ -65,7 +65,7 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-The engine declares both secrets `required: true`, so a missing one fails the run at once instead of arriving as an empty string. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
+The engine declares both secrets `required: true`, which catches a secret the caller doesn't pass. It doesn't catch one that is set but empty, which step 2 showed arrives as an empty string, so [the check step](#the-check-step) also fails on an empty secret. It checks itself out at the pinned commit with `job.workflow_repository` and `job.workflow_sha`, so `@v1` means the prompts and scripts of v1 too.
 
 ## Settings: `.github/agents.yml`
 
@@ -107,13 +107,15 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
 - **The agent holds no write token.** It writes files and the shell steps validate and apply them.
   - Triage writes `decision.json` (category, outcome, retitle), `comment.md` and, for `ready`, `spec.md`. The shell posts the original body as an `Original note:` comment, edits the body, comments, sets labels last, then sets the board Status.
   - Implement commits locally and writes `pr.md` (title and description), or `handback.md`, plus screenshots. The shell pushes the branch, opens or updates the PR, posts the screenshots, and hands off to HITL when needed.
+- **The agent's job keeps `GITHUB_TOKEN` read-only**, for example `contents: read` and `issues: read`. The agent sees the action's `github_token` in its environment, and `permissions` apply to a whole job, not to one step, so every job that runs the agent stays read-only. All writes go through `OWNER_PAT` in shell steps: push, PR, labels, comments and board. That also suits GitHub's rule that pushes and labels made with `GITHUB_TOKEN` don't start other workflows. See [research](research.md#tested-in-step-2).
+- **The agent's job limits egress** to the hosts it needs, because the OAuth token can be read from the agent's shell (see [research](research.md#tested-in-step-2)).
 - **Owner-only comments.** The workflow fetches the issue and only the owner's comments into a file, and the agent works from that file.
 - **`main` rulesets** on every consumer repo: a PR plus the required `checks` job, with no one able to skip them, the owner included, since the PAT acts as the owner.
 - **One classic `OWNER_PAT`** (scopes `repo`, `project`, `read:org`) for every repo, not a fine-grained token per repo. Decided on 2026-11-03.
   - The privilege split already keeps every token away from the agent. Only the workflow's own shell steps use it.
   - Fine-grained tokens can't be created through the API, so a token per repo would add a manual create, set and renew step to every repo. That works against a fast, repeatable setup.
   - One token means one expiry date. Give it about a year, and track it under "Things that expire" in the [plan](plan.md).
-  - Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards, or if the agent-environment test fails. The fix for a failed test is to hide secrets from the agent's shell or limit its egress. Changing the token type wouldn't help.
+  - Step 2's agent-environment test found `OWNER_PAT` unreachable from the agent's shell, so the classic token stands. Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards.
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
 
@@ -123,7 +125,7 @@ It runs first in every workflow, before Claude starts:
 
 | Missing | Result |
 | --- | --- |
-| A secret | fail, naming it |
+| A secret missing or empty | fail, naming it |
 | Board | continue, skip Status updates |
 | Labels | fail, listing them; the setup skill creates them |
 | Ready bar or hand-back list | triage runs but never applies `ready` |

@@ -32,4 +32,4 @@ Run on 2026-11-03 from the private repo `github-agents-sandbox` (since deleted),
   - The `github_token` input (here `github.token`): in the agent's own env as `GH_TOKEN`, `GITHUB_TOKEN`, `DEFAULT_WORKFLOW_TOKEN` and `OVERRIDE_GITHUB_TOKEN`. So the agent can do whatever that token's `permissions` allow.
   - The agent's env also has empty `ANTHROPIC_API_KEY`, `AWS_*` and `SSH_SIGNING_KEY` names, from the action.
   - The probe didn't decode the credentials `actions/checkout` persists: v7 writes them base64-encoded to a `git-credentials-*.config` file under `$RUNNER_TEMP`, not to `.git/config`. Assume the agent can read those too, and check out with `persist-credentials: false` where the agent runs.
-  - **So:** the OAuth token is reachable, and an egress allowlist is needed (see the plan's Security follow-ups). Give the agent step a `github_token` with only the permissions the agent needs, and never `OWNER_PAT`.
+  - **So:** the OAuth token is reachable, and an egress allowlist is needed (step 3 of the plan). Limit the `permissions` of every job that runs the agent, since a step can't narrow its job's token, and never give the agent `OWNER_PAT`.
