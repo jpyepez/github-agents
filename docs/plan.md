@@ -49,9 +49,11 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [x] The public sandbox run ([Testing the engine](design.md#testing-the-engine)) passes for triage and implement
      - [x] In the sandbox, label two issues `ready` while a third issue's build is running, and add a label that doesn't match. Check that all three build. Then label one issue `ready` a second time, and check that it replaces only that issue's own pending run. It's untested whether a job skipped by its `if` enters a concurrency group, and this settles it.
      - [x] In the sandbox, probe with step 2's hash method whether the agent's shell can reach `ACTIONS_RUNTIME_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. Issue events run on `main`, so if it can, a hijacked agent could poison caches that CI on `main` restores. If it's reachable, that becomes a decision before the tag.
+     - [ ] Merge the step 3 PR, after the owner's go-ahead
+     - [ ] Tag `v1.0.0` and `v1`, after the owner's go-ahead
+     - [ ] Smoke run, after the owner's go-ahead: point the sandbox's callers at `@v1`, then triage a new issue and build a `ready` one
      - [ ] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
      - [ ] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
-     - [ ] Tag `v1.0.0` and `v1`, after the owner's go-ahead
 4. **dev-website-2026 goes public.** Its items are below.
 5. **lyrics-display goes public and migrates.** Its items are below.
 6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off.
