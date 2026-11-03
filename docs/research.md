@@ -25,4 +25,3 @@ GitHub Actions facts the design rests on. They were checked against docs.github.
 - [ ] The self-checkout works from a private caller with the default token, the engine being public.
 - [ ] Secrets passed by name arrive in the callee.
 - [ ] What the agent's shell environment exposes in `claude-code-action`. If `CLAUDE_CODE_OAUTH_TOKEN` or other secrets are visible, add an egress allowlist (for example harden-runner).
-- [ ] A fine-grained PAT can move cards on a user-owned Projects board. If it can, use one per repo, limited to that repo, instead of the classic `OWNER_PAT` (scopes `repo`, `project`, `read:org`, which reaches every repo).

@@ -109,7 +109,11 @@ Consumer repos are public, so anyone can comment on the owner's issues. A rule i
   - Implement commits locally and writes `pr.md` (title and description), or `handback.md`, plus screenshots. The shell pushes the branch, opens or updates the PR, posts the screenshots, and hands off to HITL when needed.
 - **Owner-only comments.** The workflow fetches the issue and only the owner's comments into a file, and the agent works from that file.
 - **`main` rulesets** on every consumer repo: a PR plus the required `checks` job, with no one able to skip them, the owner included, since the PAT acts as the owner.
-- **Fine-grained PAT per repo**, if one can edit a user-owned Projects board (untested, see research).
+- **One classic `OWNER_PAT`** (scopes `repo`, `project`, `read:org`) for every repo, not a fine-grained token per repo. Decided on 2026-11-03.
+  - The privilege split already keeps every token away from the agent. Only the workflow's own shell steps use it.
+  - Fine-grained tokens can't be created through the API, so a token per repo would add a manual create, set and renew step to every repo. That works against a fast, repeatable setup.
+  - One token means one expiry date. Give it about a year, and track it under "Things that expire" in the [plan](plan.md).
+  - Revisit this if GitHub adds fine-grained permissions for user-owned Projects boards, or if the agent-environment test fails. The fix for a failed test is to hide secrets from the agent's shell or limit its egress. Changing the token type wouldn't help.
 
 What a hijacked agent can still do: write a bad decision, which the outcome check validates, or put bad code in a PR the owner reviews before merging.
 
