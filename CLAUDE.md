@@ -13,3 +13,17 @@ The engine behind auto triage and auto implement on GitHub: reusable workflows (
 - The design's decisions are settled. Build to them; raise a change with the owner rather than drifting from them.
 - Anything outward-facing needs the owner's go-ahead first: creating or deleting repos, changing visibility or settings, pushing, merging, deleting issues.
 - This repo is public. Keep consumer repos' private details out of it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are GitHub issues on `jpyepez/github-agents`, managed with `gh` and tracked on the [github-agents board](https://github.com/users/jpyepez/projects/4). Triage is by hand; no automation runs on this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage roles, with `ready-for-agent` written as `ready`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Glossary `GLOSSARY.md`, ADRs `docs/adr/`, out-of-scope `docs/out-of-scope/`, all writable. See `docs/agents/domain.md`.

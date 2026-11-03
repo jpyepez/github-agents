@@ -6,10 +6,10 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 
 1. **Create the repo**
    - [x] Local folder `~/Hub/Areas/Tooling/github-agents` with `README.md`, `LICENSE` (MIT), `CLAUDE.md` and `docs/`
-   - [ ] `gh repo create jpyepez/github-agents --public --source . --push`, with description "Reusable GitHub workflows that triage issues and implement ready ones with Claude"
-   - [ ] Merge settings: squash only, `PR_TITLE` / `PR_BODY`, delete branches
+   - [x] `gh repo create jpyepez/github-agents --public --source . --push`, with description "Reusable GitHub workflows that triage issues and implement ready ones with Claude"
+   - [x] Merge settings: squash only, `PR_TITLE` / `PR_BODY`, delete branches
    - [x] repo-scout alias `github-agents`
-   - [ ] Owner runs `/setup-work`: GitHub tracker, default labels, `docs/agents/`. Issues and a board, triaged by hand; no automation on this repo.
+   - [x] Owner runs `/setup-work`: GitHub tracker, default labels (`ready-for-agent` as `ready`), `docs/agents/`. Issues and [board 4](https://github.com/users/jpyepez/projects/4), triaged by hand; no automation on this repo.
 2. **Plumbing test** in a throwaway private repo, deleted afterwards. A small reusable "hello" workflow settles every open item in [research.md](research.md#untested-step-2-settles-these).
 3. **Engine v1**: triage and implement as `workflow_call`, the check step, `.github/agents.yml`, the privilege split, owner-only comments, the tracker seam. Port from dev-website-2026 (see [porting notes](design.md#porting-notes)). Tag `v1.0.0` and `v1`.
 4. **dev-website-2026 goes public.** Its items are below.
