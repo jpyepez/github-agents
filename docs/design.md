@@ -16,6 +16,7 @@ github-agents/
 │   └── implement.md
 ├── scripts/
 │   ├── board-status.ts     # finds the board and its Status field by name; no IDs
+│   ├── doctor.ts           # the check step, run by hand against a repo
 │   ├── triage-outcome.ts   # validates the agent's decision file
 │   └── tracker.ts          # the tracker seam: every label, board and comment call
 └── templates/              # what setup-github-agents installs into a repo
@@ -174,7 +175,25 @@ It runs first in every workflow, before Claude starts:
 | `docs/git-workflow.md` | plain sentences |
 | Tracker isn't GitHub (`docs/agents/issue-tracker.md`) | fail with a clear message |
 
-`doctor` is the same check, runnable on its own, so the setup skill can run it before and after.
+### Doctor
+
+`doctor` is the same check, run by hand against a consumer repo's checkout, so the setup skill can run it before and after. Decided with the owner on 2026-11-05 for step 7.
+
+- **How it runs:** `bun <engine>/scripts/doctor.ts [repo-root] [--repo owner/name] [--json]`, from the engine checked out at the tag the callers pin. It uses the owner's own `gh` login, changes nothing, and exits 1 on a failure. It's a script only: no workflow runs it.
+- **What it adds** to the check step, from what steps 5 and 6 needed:
+
+| Check | Result |
+| --- | --- |
+| The repo isn't public | fail: harden-runner doesn't enforce the egress allowlist on a private repo |
+| A caller isn't byte-identical to `templates/callers/` (so it pins `@v1`) | fail |
+| A caller is missing: triage always, implement with `automation: implement` | fail |
+| A caller is disabled, or not yet registered with Actions | fail: step 5 disables the old workflows before a repo goes public |
+| Old per-repo copies left (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`) | notice |
+| The checkout isn't at the tip of `base` on GitHub | notice: doctor reads the checkout, and the engine runs what's on `base` |
+
+- **Secrets by name only.** Locally, `gh secret list` shows that a secret exists, not its value, so doctor can't catch an empty one. It says so in its output. The check step still fails on an empty secret at the first real run.
+- **Not checked:** merge settings and rulesets, which the skill asks for per repo, so doctor can't know the right values; and the board's built-in workflows, which have no API.
+- **Release:** doctor ships in `v1.1.0`, and `v1` moves to it, so the skill gets doctor and the templates from the same pinned tag. The workflows and callers are unchanged from `v1.0.0`.
 
 ## Tracker
 
@@ -210,7 +229,7 @@ Callers pin `@v1`, which moves forward with each fix, and semver tags (`v1.2.0`)
 
 ## Setup: `setup-github-agents`
 
-A separate skill from `setup-work`, which it requires. It stops and asks for `/setup-work` when `docs/agents/` is missing. It asks, one section at a time:
+A separate skill from `setup-work`, which it requires. It lives with the owner's other skills in `~/.claude/skills/` (chezmoi), user-invoked, since it runs in repos not yet on the engine. Decided with the owner on 2026-11-05. It stops and asks for `/setup-work` when `docs/agents/` is missing. It asks, one section at a time:
 
 - automation level
 - board

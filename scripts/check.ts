@@ -1,6 +1,6 @@
 /// <reference types="bun" />
 // The check step: runs first in `prepare`, before Claude starts (docs/design.md, "The
-// check step"). `doctor` will run the same checks on their own.
+// check step"). `doctor.ts` runs the same checks by hand.
 //
 //   bun scripts/check.ts <repo-root> <settings.json> <out.json>
 //
