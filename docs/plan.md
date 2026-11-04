@@ -64,6 +64,10 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - The browser walk stubs third-party APIs with `page.route` rather than adding them to `egress` (lyrics-display stubs lrclib.net).
    - A repo's `CLAUDE.md` may be a symlink to `AGENTS.md` (lyrics-display's is).
    - Learned in step 6: the owner's `gh` token has no `workflow` scope, so a push that changes workflow files must go over SSH. A smoke test should build one `ready` issue, not only triage.
+   - [x] `scripts/doctor.ts` and its tests, as in [Doctor](design.md#doctor). Both consumers pass on their `main`.
+   - [ ] Merge the doctor PR, after the owner's go-ahead
+   - [ ] Tag `v1.1.0` and move `v1`, after the owner's go-ahead
+   - [ ] The `setup-github-agents` skill
 
 ## Consumer repos
 
