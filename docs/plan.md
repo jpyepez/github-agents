@@ -57,7 +57,7 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 4. **dev-website-2026 goes public.** Its items are below. Done 2026-11-04 in dev-website-2026 PR 76, as 40db98e.
 5. **lyrics-display goes public and migrates.** Its items are below. Done 2026-11-04 in lyrics-display PR 33, as 1512c60; a smoke issue (34) was triaged on the engine.
 6. **dev-website-2026 migrates**: first the owner disables its old Triage and Implement (see step 7's notes); then callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off. Done 2026-11-05 in dev-website-2026 PR 77, as 470b2aa. Smoke test: issue 78 (vague) went to HITL with `needs-info`; issue 79 was triaged `ready` and built into PR 80, whose checks passed.
-7. **`doctor`**, then the **`setup-github-agents` skill**, written from what steps 5 and 6 actually needed. Learned in step 5:
+7. **`doctor`**, then the **`setup-github-agents` skill**. Done 2026-11-05: doctor in `v1.1.0` (PR 9); the skill is in `~/.claude/skills/`. Both were written from what steps 5 and 6 actually needed. Learned in step 5:
    - Disable the old Triage and Implement before a repo goes public, since they read every commenter's text with `OWNER_PAT` and no egress limit. The disable is tied to the file path, so it survives the migration merge. Re-enable with `gh workflow enable` only after the merge. The owner runs both commands: the auto-mode classifier blocks them.
    - Scan for secrets in a `git clone --mirror`, so PR refs and orphan branches such as `pr-assets` are scanned too (gitleaks).
    - Check the state after each `gh` call. During GitHub 502s, `gh pr merge --delete-branch`, `gh issue create` and the auto-close partly failed, and `gh api` (REST) worked as a fallback.
@@ -65,10 +65,10 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - A repo's `CLAUDE.md` may be a symlink to `AGENTS.md` (lyrics-display's is).
    - Learned in step 6: the owner's `gh` token has no `workflow` scope, so a push that changes workflow files must go over SSH. A smoke test should build one `ready` issue, not only triage.
    - [x] `scripts/doctor.ts` and its tests, as in [Doctor](design.md#doctor). Both consumers pass on their `main`.
-   - [ ] Merge the doctor PR, after the owner's go-ahead
-   - [ ] Tag `v1.1.0` and move `v1`, after the owner's go-ahead
+   - [x] Merge the doctor PR, as ae592d5 (PR 9)
+   - [x] Tag `v1.1.0` and move `v1` to ae592d5. A clone of `@v1` runs doctor, and both consumers pass.
    - [x] The `setup-github-agents` skill, in `~/.claude/skills/` (chezmoi): `SKILL.md`, `migration.md`, `going-public.md`. It needs doctor at `v1`, so it works once `v1` moves.
-   - [ ] Owner: commit the skill in chezmoi
+   - [x] Owner: commit the skill in chezmoi, as dotfiles 8948361, synced to the work laptop
 
 ## Consumer repos
 
