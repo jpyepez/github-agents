@@ -16,6 +16,7 @@ github-agents/
 │   └── implement.md
 ├── scripts/
 │   ├── board-status.ts     # finds the board and its Status field by name; no IDs
+│   ├── doctor.ts           # the check step, run by hand against a repo
 │   ├── triage-outcome.ts   # validates the agent's decision file
 │   └── tracker.ts          # the tracker seam: every label, board and comment call
 └── templates/              # what setup-github-agents installs into a repo
