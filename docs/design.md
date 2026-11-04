@@ -228,7 +228,7 @@ Callers pin `@v1`, which moves forward with each fix, and semver tags (`v1.2.0`)
 
 ## Setup: `setup-github-agents`
 
-A separate skill from `setup-work`, which it requires. It stops and asks for `/setup-work` when `docs/agents/` is missing. It asks, one section at a time:
+A separate skill from `setup-work`, which it requires. It lives with the owner's other skills in `~/.claude/skills/` (chezmoi), user-invoked, since it runs in repos not yet on the engine. Decided with the owner on 2026-11-05. It stops and asks for `/setup-work` when `docs/agents/` is missing. It asks, one section at a time:
 
 - automation level
 - board

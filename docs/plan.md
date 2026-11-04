@@ -67,7 +67,8 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
    - [x] `scripts/doctor.ts` and its tests, as in [Doctor](design.md#doctor). Both consumers pass on their `main`.
    - [ ] Merge the doctor PR, after the owner's go-ahead
    - [ ] Tag `v1.1.0` and move `v1`, after the owner's go-ahead
-   - [ ] The `setup-github-agents` skill
+   - [x] The `setup-github-agents` skill, in `~/.claude/skills/` (chezmoi): `SKILL.md`, `migration.md`, `going-public.md`. It needs doctor at `v1`, so it works once `v1` moves.
+   - [ ] Owner: commit the skill in chezmoi
 
 ## Consumer repos
 
