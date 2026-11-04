@@ -53,8 +53,8 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
      - [x] Tag `v1.0.0` and `v1`, after the owner's go-ahead
      - [x] Smoke run, after the owner's go-ahead: point the sandbox's callers at `@v1`, then triage a new issue and build a `ready` one
      - [x] Tear down, after the owner's go-ahead: delete `github-agents-sandbox` and its board (project 5)
-     - [ ] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
-4. **dev-website-2026 goes public.** Its items are below.
+     - [x] Owner: revoke the sandbox's `OWNER_PAT` ("github-agents sandbox", at github.com/settings/tokens) and its Claude OAuth token
+4. **dev-website-2026 goes public.** Its items are below. Done 2026-11-04 in dev-website-2026 PR 76, as 40db98e.
 5. **lyrics-display goes public and migrates.** Its items are below.
 6. **dev-website-2026 migrates**: callers, `agents.yml` (`board: 1`, `automation: implement`, checks including `build`), and removal of the old copies (`.github/prompts/`, `scripts/board-status.ts`, `scripts/triage-outcome.ts`). Its `docs/agents/issue-tracker.md` keeps the `Closes` rule (`Closes #<n>` on its own line, other issues as "issue N"), with the reason changed to "a closing keyword closes that issue on merge"; remove the sentence saying the board moves the card to In progress at once, since that workflow is now off.
 7. **`doctor`**, then the **`setup-github-agents` skill**, written from what steps 5 and 6 actually needed.
@@ -80,8 +80,8 @@ The build order, with each step's status. Tick a step when it lands. Each outwar
 - [x] Merge settings
 - [x] Homepage URL → https://jpyepez.com
 - [x] Old worktree and local branches removed
-- [ ] Before going public: reword the personal notes in `GLOSSARY.md` (the owner writes these). Move the two draft-post issues to a private note and delete them, with the owner's OK. No history rewrite: PR refs keep the old commits reachable anyway.
-- [ ] Step 4: make public; `main` ruleset requiring the `checks` job (its `ci.yml` comment already expects one); board 1 public. No license.
+- [x] Before going public: reword the personal notes in `GLOSSARY.md` (the owner writes these). Move the two draft-post issues to a private note and delete them, with the owner's OK. No history rewrite: PR refs keep the old commits reachable anyway.
+- [x] Step 4: make public; `main` ruleset requiring the `checks` job (its `ci.yml` comment already expects one); board 1 public. No license.
 
 ## Follow-ups after the plan
 
